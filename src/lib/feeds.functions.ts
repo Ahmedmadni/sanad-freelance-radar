@@ -22,6 +22,7 @@ const HARAJ_URL =
 const HARAJ_QUERY =
   "query Search($search: String!, $page: Int) { search(search: $search, page: $page) { items { id title postDate updateDate URL bodyTEXT city } } }";
 const HARAJ_SEARCHES = ["مطلوب محاسب", "مطلوب محاسبة", "مطلوب محاسبه", "احتاج محاسب", "محاسب متعاون", "محاسب عن بعد", "محاسب دوام جزئي", "مسك دفاتر", "اقرار ضريبي", "قوائم مالية", "اقرار زكوي", "مراجعة حسابات", "محاسب قانوني"];
+const ACC = /محاسب|محاسبة|محاسبه|دفاتر|ضريب|زكا|قوائم مالية|مراجع حسابات|مراجعة حسابات|ميزانية الشركة/;
 // Keep posts from people who NEED an accountant, drop accountants advertising themselves.
 const WANTS = /مطلوب|احتاج|أحتاج|ابغى|أبغى|ابي |نبحث عن|نحتاج|ابحث عن محاسب|أبحث عن محاسب|يوجد لدينا|لمن لديه خبرة/;
 const SELF_AD = /ابحث عن وظيفة|أبحث عن وظيفة|ابحث عن عمل|أبحث عن عمل|^انا محاسب|^أنا محاسب|لدي خبرة|لدية خبرة|اقدم خدم|أقدم خدم|نقدم خدم|خدمات محاسبية|مكتب محاسب|برنامج محاسب|برامج محاسب|باقة|كاشير|حاصل على|للبيع|اشتراك|نظام نقاط بيع/;
@@ -41,7 +42,7 @@ async function fetchHaraj(): Promise<Item[]> {
         const title = String(p.title ?? "");
         const body = String(p.bodyTEXT ?? "");
         const head = `${title} ${body.slice(0, 120)}`;
-        if (!WANTS.test(head) || SELF_AD.test(title) || SELF_AD.test(body.slice(0, 80))) continue;
+        if (!WANTS.test(head) || !ACC.test(head) || SELF_AD.test(title) || SELF_AD.test(body.slice(0, 80))) continue;
         out.push({
           title,
           description: body.slice(0, 600),
@@ -59,13 +60,13 @@ async function fetchHaraj(): Promise<Item[]> {
 
 // ---- LinkedIn public job search, location = Saudi Arabia (companies hiring accountants) ----
 const LI_KEYWORDS = ["accountant", "محاسب", "bookkeeper", "accounting"];
-const LI_TYPES: [string, Employment][] = [["F", "دوام كامل"], ["P", "دوام جزئي"], ["C", "دوام جزئي"]];
+
 
 async function fetchLinkedIn(): Promise<Item[]> {
   const out: Item[] = [];
   await Promise.all(
-    LI_KEYWORDS.flatMap((k) => LI_TYPES.map(([jt, emp]) => ({ k, jt, emp }))).map(async ({ k, jt, emp }) => {
-      const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(k)}&location=Saudi%20Arabia&f_JT=${jt}&f_TPR=r2592000`;
+    LI_KEYWORDS.flatMap((k) => [0, 25].map((start) => ({ k, start }))).map(async ({ k, start }) => {
+      const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(k)}&location=Saudi%20Arabia&f_TPR=r2592000&start=${start}`;
       const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36" } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       for (const j of parseLinkedIn(await res.text())) {
@@ -77,7 +78,8 @@ async function fetchLinkedIn(): Promise<Item[]> {
           publishedAt: j.date ? new Date(j.date).toISOString() : null,
           sourceName: "لينكدإن",
           location: `${j.company} · ${j.location}`,
-          employment: emp,
+          // LinkedIn listings are salaried positions unless the title says otherwise.
+          employment: /part[- ]?time|دوام جزئي|freelance|contract|temporary|مؤقت/i.test(j.title) ? "دوام جزئي" : "دوام كامل",
         });
       }
     }),
