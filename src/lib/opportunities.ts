@@ -1,5 +1,7 @@
 export type Platform = string;
 export type Skill = "دفاتر" | "ضرائب" | "إكسل" | "ERP" | "قوائم مالية" | "تدقيق" | "دراسة جدوى";
+export type Employment = "دوام كامل" | "دوام جزئي" | "غير محدد";
+export const EMPLOYMENTS: Employment[] = ["دوام كامل", "دوام جزئي", "غير محدد"];
 export type Urgency = "عاجل" | "متوسط" | "عادي";
 
 export interface Opportunity {
@@ -17,6 +19,7 @@ export interface Opportunity {
   client: string;
   url: string;
   sourceName?: string;
+  employment?: Employment;
   publishedAt?: string | null;
 }
 
