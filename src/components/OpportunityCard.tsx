@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Textarea } from "@/components/ui/textarea";
 import { generateProposal } from "@/lib/ai.functions";
 import { timeAgo, type Opportunity } from "@/lib/opportunities";
+import { formatDate } from "@/lib/use-live-sources";
 import type { Settings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +33,7 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
         data: {
           title: o.title,
           description: o.description,
-          budget: `${o.budgetMin} - ${o.budgetMax} $`,
+          budget: o.budgetMax > 0 ? `${o.budgetMin} - ${o.budgetMax} $` : "غير محددة",
           client: o.client,
           name: settings.freelancerName,
           bio: settings.bio,
@@ -65,8 +66,14 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
         {o.skills.map((s) => <Badge key={s} variant="secondary" className="font-normal">{s}</Badge>)}
         {o.tools?.map((t) => <Badge key={t} variant="outline" className="font-normal">{t}</Badge>)}
       </div>
+      {o.sourceName && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span>المصدر: <a href={o.url} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">{o.sourceName}</a></span>
+          <span>التحديث: {formatDate(o.publishedAt)}</span>
+        </div>
+      )}
       <div className="mt-4 flex flex-wrap items-center gap-3 border-t pt-4">
-        <div className="font-mono text-base font-semibold text-primary" dir="ltr">${o.budgetMin} – ${o.budgetMax}</div>
+        {o.budgetMax > 0 ? <div className="font-mono text-base font-semibold text-primary" dir="ltr">${o.budgetMin} – ${o.budgetMax}</div> : <div className="text-sm text-muted-foreground">الميزانية غير محددة</div>}
         <span className="flex items-center gap-1 text-xs text-muted-foreground"><Users className="size-3" />{o.offers} عروض</span>
         <div className="ms-auto flex gap-2">
           <Button size="sm" variant="ghost" asChild>

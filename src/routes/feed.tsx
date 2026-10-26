@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Pause, Play, Rss } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OpportunityCard } from "@/components/OpportunityCard";
+import { LiveSourcesPanel } from "@/components/LiveSourcesPanel";
 import { SEED, randomOpportunity, type Opportunity } from "@/lib/opportunities";
 import { useSettings } from "@/lib/settings";
 import { Link } from "@tanstack/react-router";
@@ -53,6 +54,8 @@ function Feed() {
           <Button onClick={() => setRunning(!running)}>{running ? <><Pause className="size-4" />إيقاف</> : <><Play className="size-4" />تشغيل</>}</Button>
         </div>
       </div>
+      <LiveSourcesPanel settings={settings} columns={false} />
+      <h2 className="mx-auto w-full max-w-3xl text-xl font-bold">المحاكاة</h2>
       <div className="mx-auto grid max-w-3xl gap-4">
         {items.map((o) => <OpportunityCard key={o.id} o={o} settings={settings} fresh={o.id === freshId} />)}
       </div>

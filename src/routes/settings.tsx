@@ -92,7 +92,7 @@ function SettingsPage() {
         </form>
       </Card>
 
-      <Card title="مصادر RSS و Webhook" desc="أضف روابط خلاصات RSS أو عناوين Webhook لتغذية الرادار.">
+      <Card title="مصادر RSS و Webhook" desc="أضف رابط خلاصة RSS/Atom، أو رابط Webhook يُرجع JSON (قائمة فيها title وdescription وurl). تُجلب الفرص كل 5 دقائق وتُحذف المكررات.">
         {s.sources.map((x) => (
           <div key={x.id} className="flex items-center gap-3 rounded-lg border p-3">
             <Badge variant="outline">{x.type}</Badge>
@@ -103,7 +103,7 @@ function SettingsPage() {
         <div className="grid gap-2 md:grid-cols-[110px_1fr_1.5fr_auto]">
           <Select value={src.type} onValueChange={(v) => setSrc({ ...src, type: v as Source["type"] })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="RSS">RSS</SelectItem><SelectItem value="Webhook">Webhook</SelectItem></SelectContent>
+            <SelectContent><SelectItem value="RSS">RSS</SelectItem><SelectItem value="Webhook">Webhook (JSON)</SelectItem></SelectContent>
           </Select>
           <Input value={src.name} onChange={(e) => setSrc({ ...src, name: e.target.value })} placeholder="الاسم" />
           <Input dir="ltr" value={src.url} onChange={(e) => setSrc({ ...src, url: e.target.value })} placeholder="https://..." />

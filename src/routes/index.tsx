@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { OpportunityCard } from "@/components/OpportunityCard";
+import { LiveSourcesPanel } from "@/components/LiveSourcesPanel";
 import { SEED, SKILLS, PLATFORMS, URGENCIES, matchesKeywords } from "@/lib/opportunities";
 import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
@@ -97,7 +98,10 @@ function Dashboard() {
         </div>
       </section>
 
+      <LiveSourcesPanel settings={settings} />
+
       <section>
+        <h2 className="mb-1 text-xl font-bold">نماذج توضيحية</h2>
         <p className="mb-4 text-sm text-muted-foreground">{list.length} فرصة مطابقة</p>
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {list.map((o) => <OpportunityCard key={o.id} o={o} settings={settings} />)}

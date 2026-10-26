@@ -20,7 +20,7 @@
 
 @theme inline {
   --font-sans: "IBM Plex Sans Arabic", system-ui, sans-serif;
-  --font-display: "Reem Kufi", "IBM Plex Sans Arabic", sans-serif;
+  --font-display: "IBM Plex Sans Arabic", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
   --color-gold: var(--gold);
   --color-gold-foreground: var(--gold-foreground);
