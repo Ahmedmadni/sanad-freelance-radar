@@ -58,6 +58,77 @@ async function fetchHaraj(): Promise<Item[]> {
   return out;
 }
 
+// ---- OpenSooq Saudi (السوق المفتوح): job vacancies + "wanted" posts only, never service ads ----
+const OS_TERMS = ["مطلوب محاسب", "محاسب", "محاسبة", "مسك دفاتر"];
+async function fetchOpenSooq(): Promise<Item[]> {
+  const out: Item[] = [];
+  await Promise.all(
+    OS_TERMS.map(async (term) => {
+      const res = await fetch(`https://sa.opensooq.com/ar/find?term=${encodeURIComponent(term)}`, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ar" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const html = await res.text();
+      const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+      if (!m?.[1]) return;
+      const items: any[] = JSON.parse(m[1])?.props?.pageProps?.serpApiResponse?.listings?.items ?? [];
+      for (const x of items) {
+        const title = String(x.title ?? "");
+        const body = String(x.masked_description ?? "");
+        const head = `${title} ${body}`;
+        const isVacancy = x.cat2_code === "JobPoster";
+        const isWanted = WANTS.test(head) && !["Services", "ComputerAndLaptops", "BusinessIndustrial"].includes(x.cat1_code);
+        if (!(isVacancy || isWanted) || !ACC.test(title) || SELF_AD.test(title)) continue;
+        out.push({
+          title,
+          description: body,
+          link: `https://sa.opensooq.com/ar/search/${x.id}`,
+          publishedAt: x.inserted_date ? new Date(x.inserted_date).toISOString() : null,
+          sourceName: "السوق المفتوح",
+          location: x.city_label ? `السوق المفتوح · ${x.city_label}` : "السوق المفتوح",
+          employment: inferEmployment(head),
+        });
+      }
+    }),
+  );
+  return out;
+}
+
+// ---- Mourjan (مرجان) Saudi accounting vacancies: every ad there is an employer looking for an accountant ----
+function arRelative(t: string): string | null {
+  const n = Number(t.match(/\d+/)?.[0] ?? 1);
+  const mins = /دقيق/.test(t) ? n : /ساع/.test(t) ? n * 60 : /يوم|أيام/.test(t) ? n * 1440 : /أسبوع|اسبوع|أسابيع/.test(t) ? n * 10080 : /شهر|أشهر/.test(t) ? n * 43200 : null;
+  return mins === null ? null : new Date(Date.now() - mins * 60000).toISOString();
+}
+const MJ_CITIES: Record<string, string> = { riyadh: "الرياض", jeddah: "جدة", dammam: "الدمام", "al-madina": "المدينة المنورة", makkah: "مكة", khobar: "الخبر", taif: "الطائف", tabuk: "تبوك", abha: "أبها", qassim: "القصيم", jubail: "الجبيل", hail: "حائل", jazan: "جازان", najran: "نجران", yanbu: "ينبع" };
+async function fetchMourjan(): Promise<Item[]> {
+  const res = await fetch("https://www.mourjan.com/sa/accounting/vacancies/", {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ar" },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const html = await res.text();
+  const out: Item[] = [];
+  for (const block of html.split('<div class=widget id=').slice(1)) {
+    const href = block.match(/href=(\/sa\/[^ >]+)/)?.[1];
+    const content = block.match(/class="content[^"]*">([\s\S]*?)<\/div>/)?.[1]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (!href || !content) continue;
+    const when = block.match(/<div>(منذ[^<]+)<\/div>/)?.[1] ?? "";
+    const slug = href.split("/")[2] ?? "";
+    const city = MJ_CITIES[slug] ?? (slug && slug !== "accounting" ? slug : "السعودية");
+    if (SELF_AD.test(content.slice(0, 80))) continue;
+    out.push({
+      title: content.length > 90 ? `${content.slice(0, 90)}…` : content,
+      description: content.slice(0, 600),
+      link: `https://www.mourjan.com${href}`,
+      publishedAt: arRelative(when),
+      sourceName: "مرجان",
+      location: `مرجان · ${city}`,
+      employment: inferEmployment(content),
+    });
+  }
+  return out;
+}
+
 // ---- LinkedIn public job search, location = Saudi Arabia (companies hiring accountants) ----
 const LI_KEYWORDS = ["accountant", "محاسب", "bookkeeper", "accounting"];
 
@@ -129,6 +200,8 @@ export const fetchSources = createServerFn({ method: "POST" })
     await Promise.all([
       run("حراج", "https://haraj.com.sa", true, fetchHaraj),
       run("لينكدإن", "https://www.linkedin.com/jobs", true, fetchLinkedIn),
+      run("السوق المفتوح", "https://sa.opensooq.com", true, fetchOpenSooq),
+      run("مرجان", "https://www.mourjan.com/sa/accounting/vacancies/", true, fetchMourjan),
       ...BUILT_IN_RSS.map((s) => run(`${s.name} (${s.url.split("job_")[1]?.replace(".xml", "")})`, s.url, true, () => fetchUrl(s.url, s.name, true))),
       ...data.sources.map((s) => run(s.name, s.url, false, () => fetchUrl(s.url, s.name, false))),
     ]);
