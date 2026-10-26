@@ -75,7 +75,7 @@ function SettingsPage() {
           <Button disabled={sending || !s.botToken || !s.chatId} onClick={() => test(false)}>{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}رسالة تجريبية</Button>
           <Button variant="outline" disabled={sending || !s.botToken || !s.chatId} onClick={() => test(true)}>إرسال ملخص الفرص المطابقة</Button>
         </div>
-        <p className="text-xs text-muted-foreground">تُحفظ البيانات في متصفحك فقط.</p>
+        <p className="text-xs text-muted-foreground">عند تفعيل التنبيهات، تصلك رسالة تلقائية لكل فرصة جديدة من مصادرك تطابق كلماتك المفتاحية (تُفحص المصادر كل 5 دقائق أثناء فتح التطبيق). الفرص الموجودة عند أول تشغيل لا تُرسل. تُحفظ البيانات في متصفحك فقط.</p>
       </Card>
 
       <Card title="الكلمات المفتاحية" desc="سيتم التنبيه بالفرص التي تحتوي على أي من هذه الكلمات.">

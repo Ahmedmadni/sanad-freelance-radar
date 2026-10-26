@@ -127,3 +127,15 @@ export function toOpportunity(it: RawItem & { sourceName: string }, idx: number)
     publishedAt: it.publishedAt,
   };
 }
+
+export const alertKey = (o: { url: string; title: string }) => (o.url ? normLink(o.url) : normTitle(o.title));
+
+/** New opportunities that match keywords + min budget and were not alerted before. Unknown budget (0) passes. */
+export function pickAlerts(items: Opportunity[], keywords: string[], minBudget: number, sent: Set<string>) {
+  return items.filter((o) => {
+    if (sent.has(alertKey(o))) return false;
+    if (minBudget > 0 && o.budgetMax > 0 && o.budgetMax < minBudget) return false;
+    const text = `${o.title} ${o.description}`.toLowerCase();
+    return keywords.some((k) => text.includes(k.toLowerCase()) || k.split(" ").some((w) => w.length > 2 && text.includes(w.toLowerCase())));
+  });
+}

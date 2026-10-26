@@ -30,3 +30,19 @@ describe("feeds", () => {
     expect(isAccounting("إعداد إقرار ضريبة القيمة المضافة")).toBe(true);
   });
 });
+
+import { pickAlerts, alertKey } from "@/lib/feeds";
+const opp = (title: string, budgetMax = 0) => ({ id: title, title, description: "", platform: "مستقل" as const, budgetMin: 0, budgetMax, skills: [], urgency: "عادي" as const, postedMinutesAgo: 0, offers: 0, client: "", url: `https://x.com/${encodeURIComponent(title)}` });
+
+describe("telegram alerts", () => {
+  it("alerts only on keyword matches", () => {
+    expect(pickAlerts([opp("مطلوب مسك دفاتر"), opp("تصميم شعار")], ["مسك دفاتر"], 0, new Set())).toHaveLength(1);
+  });
+  it("does not alert twice for the same opportunity", () => {
+    const o = opp("إعداد قوائم مالية");
+    expect(pickAlerts([o], ["قوائم مالية"], 0, new Set([alertKey(o)]))).toHaveLength(0);
+  });
+  it("skips opportunities below the minimum budget but keeps unknown budgets", () => {
+    expect(pickAlerts([opp("تدقيق حسابات", 100), opp("تدقيق مخزون", 0)], ["تدقيق"], 200, new Set())).toHaveLength(1);
+  });
+});
