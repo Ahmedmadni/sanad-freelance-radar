@@ -15,7 +15,7 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "لوحة التحكم | رادار فرص المحاسبة" },
-      { name: "description", content: "تابع أحدث مشاريع المحاسبة والمالية من مستقل وخمسات وبعيد في لوحة واحدة." },
+      { name: "description", content: "تابع أحدث مشاريع المحاسبة والمالية من حراج ومصادر سعودية في لوحة واحدة." },
       { property: "og:title", content: "رادار فرص المحاسبة" },
       { property: "og:description", content: "لوحة متابعة فرص المحاسبة للمحاسب المستقل مع مولد عروض ذكي." },
       { property: "og:type", content: "website" },
@@ -44,7 +44,7 @@ function Dashboard() {
   const [platform, setPlatform] = useState("all");
 
   const list = useMemo(() => SEED.filter((o) => {
-    if (query && !`${o.title} ${o.description} ${o.client} ${o.tools?.join(" ")}`.includes(q)) return false;
+    if (query && !`${o.title} ${o.description} ${o.client} ${o.tools?.join(" ")}`.includes(query)) return false;
     if (skills.length && !skills.some((s) => o.skills.includes(s as any))) return false;
     if (urgency !== "all" && o.urgency !== urgency) return false;
     if (platform !== "all" && o.platform !== platform) return false;

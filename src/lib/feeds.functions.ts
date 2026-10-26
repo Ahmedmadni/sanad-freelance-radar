@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { parseFeed, parseJson, dedupe, isAccounting, toOpportunity, type RawItem } from "./feeds";
+import { parseFeed, parseJson, dedupe, isAccounting, isSaudi, toOpportunity, type RawItem } from "./feeds";
 
 type In = { sources: { name: string; url: string; type: "RSS" | "Webhook" }[] };
 type Item = RawItem & { sourceName: string; location?: string };
@@ -20,19 +20,19 @@ const HARAJ_URL =
   "https://graphql.haraj.com.sa/?queryName=search&lang=ar&clientId=5PfyC2s3-xlv8-ManX-RCdf-LqhFYr5SkUh3v3&version=N9.0.38";
 const HARAJ_QUERY =
   "query Search($search: String!, $page: Int) { search(search: $search, page: $page) { items { id title postDate updateDate URL bodyTEXT city } } }";
-const HARAJ_SEARCHES = ["مطلوب محاسب", "مطلوب محاسبة", "احتاج محاسب", "مسك دفاتر", "اقرار ضريبي", "قوائم مالية", "اقرار زكوي"];
+const HARAJ_SEARCHES = ["مطلوب محاسب", "مطلوب محاسبة", "مطلوب محاسبه", "احتاج محاسب", "محاسب متعاون", "محاسب عن بعد", "محاسب دوام جزئي", "مسك دفاتر", "اقرار ضريبي", "قوائم مالية", "اقرار زكوي", "مراجعة حسابات", "محاسب قانوني"];
 // Keep posts from people who NEED an accountant, drop accountants advertising themselves.
 const WANTS = /مطلوب|احتاج|أحتاج|ابغى|أبغى|ابي |نبحث عن|نحتاج|ابحث عن محاسب|أبحث عن محاسب|يوجد لدينا|لمن لديه خبرة/;
-const SELF_AD = /ابحث عن وظيفة|أبحث عن وظيفة|ابحث عن عمل|أبحث عن عمل|^انا محاسب|^أنا محاسب|لدي خبرة|لدية خبرة|اقدم خدم|أقدم خدم|نقدم خدم|خدمات محاسبية|مكتب محاسب/;
+const SELF_AD = /ابحث عن وظيفة|أبحث عن وظيفة|ابحث عن عمل|أبحث عن عمل|^انا محاسب|^أنا محاسب|لدي خبرة|لدية خبرة|اقدم خدم|أقدم خدم|نقدم خدم|خدمات محاسبية|مكتب محاسب|برنامج محاسب|برامج محاسب|باقة|كاشير|حاصل على|للبيع|اشتراك|نظام نقاط بيع/;
 
 async function fetchHaraj(): Promise<Item[]> {
   const out: Item[] = [];
   await Promise.all(
-    HARAJ_SEARCHES.map(async (search) => {
+    HARAJ_SEARCHES.flatMap((search) => [1, 2].map((page) => ({ search, page }))).map(async ({ search, page }) => {
       const res = await fetch(HARAJ_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Origin: "https://haraj.com.sa", "User-Agent": "Mozilla/5.0" },
-        body: JSON.stringify({ query: HARAJ_QUERY, variables: { search, page: 1 } }),
+        body: JSON.stringify({ query: HARAJ_QUERY, variables: { search, page } }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const j = (await res.json()) as any;
@@ -55,10 +55,8 @@ async function fetchHaraj(): Promise<Item[]> {
   return out;
 }
 
-const BUILT_IN_RSS = [
-  { name: "Freelancer (محاسبة)", url: "https://www.freelancer.com/rss/job_accounting.xml" },
-  { name: "Freelancer (مسك دفاتر)", url: "https://www.freelancer.com/rss/job_bookkeeping.xml" },
-];
+// Saudi Arabia only: Haraj is the sole built-in source; user sources are filtered by isSaudi.
+const BUILT_IN_RSS: { name: string; url: string }[] = [];
 
 async function fetchUrl(url: string, name: string, trusted: boolean): Promise<Item[]> {
   const res = await fetch(safeUrl(url), {
@@ -69,7 +67,7 @@ async function fetchUrl(url: string, name: string, trusted: boolean): Promise<It
   const t = body.trimStart();
   const items = t.startsWith("{") || t.startsWith("[") ? parseJson(JSON.parse(t)) : parseFeed(body);
   return items
-    .filter((i) => i.title && i.link && (trusted || isAccounting(`${i.title} ${i.description}`)))
+    .filter((i) => i.title && i.link && (trusted || isAccounting(`${i.title} ${i.description}`)) && isSaudi(`${i.title} ${i.description} ${i.link}`))
     .map((i) => ({ ...i, sourceName: name }));
 }
 
