@@ -57,7 +57,7 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
     >
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">{o.platform}</Badge>
-        <Badge variant="outline" className={urgencyClass[o.urgency]}>{o.urgency}</Badge>
+        {o.employment && o.employment !== "غير محدد" && <Badge variant="secondary">{o.employment}</Badge>}
         <span className="ms-auto flex items-center gap-1 text-muted-foreground"><Clock className="size-3" />{timeAgo(o.postedMinutesAgo)}</span>
       </div>
       <h3 className="mt-3 font-display text-lg font-bold leading-snug text-card-foreground">{o.title}</h3>
@@ -68,7 +68,7 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
       </div>
       {o.sourceName && (
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span>المصدر: <a href={o.url} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">{o.sourceName}</a></span>
+          <span>المنصة: <a href={o.url} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">{o.sourceName}</a>{o.client !== o.sourceName && ` · ${o.client}`}</span>
           <span>التحديث: {formatDate(o.publishedAt)}</span>
         </div>
       )}

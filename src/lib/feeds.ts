@@ -1,4 +1,4 @@
-import type { Opportunity, Skill } from "./opportunities";
+import type { Employment, Opportunity, Skill } from "./opportunities";
 
 export interface RawItem {
   title: string;
@@ -104,7 +104,7 @@ export function dedupe<T extends { title: string; link: string }>(items: T[]): T
   return out;
 }
 
-export function toOpportunity(it: RawItem & { sourceName: string; location?: string }, idx: number): Opportunity {
+export function toOpportunity(it: RawItem & { sourceName: string; location?: string; employment?: Employment }, idx: number): Opportunity {
   const text = `${it.title} ${it.description}`;
   const nums = [...text.matchAll(/(?:\$|SAR|ريال)\s?(\d{2,6})|(\d{2,6})\s?(?:\$|دولار|USD|ريال|SAR)/g)].map((m) => Number(m[1] ?? m[2]));
   const min = nums.length ? Math.min(...nums) : 0;
@@ -124,6 +124,7 @@ export function toOpportunity(it: RawItem & { sourceName: string; location?: str
     client: it.location ?? it.sourceName,
     url: it.link,
     sourceName: it.sourceName,
+    employment: it.employment ?? inferEmployment(text),
     publishedAt: it.publishedAt,
   };
 }
@@ -145,4 +146,25 @@ const SAUDI = /السعودي|السعودية|المملكة|الرياض|جد�
 /** True only when the text clearly points to Saudi Arabia (city, country, ZATCA, or a .sa link). */
 export function isSaudi(text: string) {
   return SAUDI.test(text);
+}
+
+/** Part-time covers part-time, freelance, remote-contract and per-task work; full-time covers permanent positions. */
+export function inferEmployment(text: string): Employment {
+  if (/دوام جزئي|جزئي|بارت تايم|part[- ]?time|متعاون|عن بعد|فريلانس|freelance|بالساعة|بالقطعة|مشروع|project|contract|عقد مؤقت/i.test(text)) return "دوام جزئي";
+  if (/دوام كامل|full[- ]?time|شاغر وظيفي|وظيفة شاغرة|راتب شهري|permanent/i.test(text)) return "دوام كامل";
+  return "غير محدد";
+}
+
+/** Parses LinkedIn's public job-search HTML cards. */
+export function parseLinkedIn(html: string) {
+  return html.split("<li").slice(1).map((c) => {
+    const pick = (re: RegExp) => decode(c.match(re)?.[1] ?? "");
+    return {
+      title: pick(/base-search-card__title[^>]*>([\s\S]*?)<\/h3>/),
+      company: pick(/base-search-card__subtitle[^>]*>([\s\S]*?)<\/h4>/),
+      location: pick(/job-search-card__location[^>]*>([\s\S]*?)<\/span>/),
+      link: (c.match(/base-card__full-link[^>]*href="([^"?]+)/)?.[1] ?? "").trim(),
+      date: c.match(/<time[^>]*datetime="([^"]+)"/)?.[1] ?? null,
+    };
+  }).filter((x) => x.title && x.link);
 }
