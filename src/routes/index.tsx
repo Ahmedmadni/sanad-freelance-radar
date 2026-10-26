@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { OpportunityCard } from "@/components/OpportunityCard";
-import { LiveSourcesPanel } from "@/components/LiveSourcesPanel";
-import { SEED, SKILLS, PLATFORMS, URGENCIES, matchesKeywords } from "@/lib/opportunities";
+import { SourcesStatus } from "@/components/LiveSourcesPanel";
+import { useLiveSources } from "@/lib/use-live-sources";
+import { SKILLS, URGENCIES, matchesKeywords, type Opportunity } from "@/lib/opportunities";
 import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 
@@ -33,14 +34,17 @@ const BUDGETS = [
 
 function Dashboard() {
   const [settings] = useSettings();
-  const [q, setQ] = useState("");
+  const q = useLiveSources(settings.sources);
+  const SEED: Opportunity[] = q.data?.items ?? [];
+  const PLATFORMS = [...new Set(SEED.map((o) => o.platform))];
+  const [query, setQ] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
   const [budget, setBudget] = useState("all");
   const [urgency, setUrgency] = useState("all");
   const [platform, setPlatform] = useState("all");
 
   const list = useMemo(() => SEED.filter((o) => {
-    if (q && !`${o.title} ${o.description} ${o.client} ${o.tools?.join(" ")}`.includes(q)) return false;
+    if (query && !`${o.title} ${o.description} ${o.client} ${o.tools?.join(" ")}`.includes(q)) return false;
     if (skills.length && !skills.some((s) => o.skills.includes(s as any))) return false;
     if (urgency !== "all" && o.urgency !== urgency) return false;
     if (platform !== "all" && o.platform !== platform) return false;
@@ -48,14 +52,14 @@ function Dashboard() {
     if (budget === "250-1000" && (o.budgetMax < 250 || o.budgetMin > 1000)) return false;
     if (budget === "gt1000" && o.budgetMax <= 1000) return false;
     return true;
-  }), [q, skills, budget, urgency, platform]);
+  }), [SEED, query, skills, budget, urgency, platform]);
 
   const matched = SEED.filter((o) => matchesKeywords(o, settings.keywords)).length;
   const stats = [
     { icon: Briefcase, label: "فرص نشطة", value: SEED.length },
     { icon: Flame, label: "عاجلة", value: SEED.filter((o) => o.urgency === "عاجل").length },
     { icon: Target, label: "تطابق كلماتك", value: matched },
-    { icon: Wallet, label: "متوسط الميزانية", value: `$${Math.round(SEED.reduce((a, o) => a + (o.budgetMin + o.budgetMax) / 2, 0) / SEED.length)}` },
+    { icon: Wallet, label: "متوسط الميزانية", value: `$${Math.round(SEED.reduce((a, o) => a + (o.budgetMax > 0 ? (o.budgetMin + o.budgetMax) / 2 : 0), 0) / Math.max(1, SEED.filter((o) => o.budgetMax > 0).length))}` },
   ];
 
   return (
@@ -79,7 +83,7 @@ function Dashboard() {
         <div className="grid gap-3 md:grid-cols-4">
           <div className="relative md:col-span-1">
             <Search className="absolute start-3 top-2.5 size-4 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث: ساب، زكاة، فودكس..." className="ps-9" />
+            <Input value={query} onChange={(e) => setQ(e.target.value)} placeholder="ابحث: ساب، زكاة، فودكس..." className="ps-9" />
           </div>
           <Filter value={budget} onChange={setBudget} items={BUDGETS} />
           <Filter value={urgency} onChange={setUrgency} items={[{ v: "all", l: "كل مستويات الإلحاح" }, ...URGENCIES.map((u) => ({ v: u, l: u }))]} />
@@ -98,10 +102,11 @@ function Dashboard() {
         </div>
       </section>
 
-      <LiveSourcesPanel settings={settings} />
+      <SourcesStatus q={q} />
 
       <section>
-        <h2 className="mb-1 text-xl font-bold">نماذج توضيحية</h2>
+        <h2 className="mb-1 text-xl font-bold">فرص حقيقية</h2>
+        {q.isLoading && <p className="py-8 text-center text-muted-foreground">جارٍ جلب الفرص الحقيقية...</p>}
         <p className="mb-4 text-sm text-muted-foreground">{list.length} فرصة مطابقة</p>
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {list.map((o) => <OpportunityCard key={o.id} o={o} settings={settings} />)}

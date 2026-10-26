@@ -12,7 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSettings, type Source } from "@/lib/settings";
 import { sendTelegramTest } from "@/lib/ai.functions";
-import { SEED, matchesKeywords } from "@/lib/opportunities";
+import { matchesKeywords } from "@/lib/opportunities";
+import { useLiveSources } from "@/lib/use-live-sources";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -41,6 +42,7 @@ function Card({ title, desc, children }: { title: string; desc?: string; childre
 function SettingsPage() {
   const [s, update] = useSettings();
   const send = useServerFn(sendTelegramTest);
+  const live = useLiveSources(s.sources);
   const [kw, setKw] = useState("");
   const [sending, setSending] = useState(false);
   const [src, setSrc] = useState<Omit<Source, "id">>({ type: "RSS", name: "", url: "" });
@@ -48,7 +50,7 @@ function SettingsPage() {
   async function test(digest: boolean) {
     setSending(true);
     try {
-      const matched = SEED.filter((o) => matchesKeywords(o, s.keywords) && o.budgetMax >= s.minBudget).slice(0, 5);
+      const matched = (live.data?.items ?? []).filter((o) => matchesKeywords(o, s.keywords) && o.budgetMax >= s.minBudget).slice(0, 5);
       const text = digest
         ? `<b>📡 رادار فرص المحاسبة</b>\n${matched.length} فرص تطابق كلماتك:\n\n` +
           matched.map((o) => `• <b>${o.title}</b>\n  ${o.platform} | $${o.budgetMin}-${o.budgetMax} | ${o.urgency}\n  ${o.url}`).join("\n\n")
