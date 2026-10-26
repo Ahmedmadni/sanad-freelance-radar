@@ -11,7 +11,7 @@ export const generateProposal = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { streamText } = await import("ai");
     const { createOpenAI } = await import("@ai-sdk/openai");
-    const apiKey = process.env.LOVABLE_API_KEY;
+    const apiKey = process.env["LOVABLE_API_KEY"];
     if (!apiKey) throw new Error("مفتاح الذكاء الاصطناعي غير مهيأ");
 
     let runId: string | undefined;

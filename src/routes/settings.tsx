@@ -108,7 +108,7 @@ function SettingsPage() {
           <Input value={src.name} onChange={(e) => setSrc({ ...src, name: e.target.value })} placeholder="الاسم" />
           <Input dir="ltr" value={src.url} onChange={(e) => setSrc({ ...src, url: e.target.value })} placeholder="https://..." />
           <Button variant="outline" onClick={() => {
-            if (!src.name || !/^https?:\/\//.test(src.url)) return toast.error("أدخل اسماً ورابطاً صحيحاً");
+            if (!src.name || !/^https?:\/\//.test(src.url)) { toast.error("أدخل اسماً ورابطاً صحيحاً"); return; }
             update({ sources: [...s.sources, { ...src, id: crypto.randomUUID() }] }); setSrc({ type: "RSS", name: "", url: "" });
           }}><Plus className="size-4" /></Button>
         </div>

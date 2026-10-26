@@ -53,7 +53,7 @@ const TEMPLATES: Omit<Opportunity, "id" | "postedMinutesAgo" | "offers">[] = [
 
 let counter = 0;
 export function randomOpportunity(): Opportunity {
-  const t = TEMPLATES[Math.floor(Math.random() * TEMPLATES.length)];
+  const t = TEMPLATES[Math.floor(Math.random() * TEMPLATES.length)]!;
   counter += 1;
   return { ...t, id: `live-${Date.now()}-${counter}`, postedMinutesAgo: 0, offers: 0 };
 }
