@@ -58,3 +58,9 @@ describe("saudi only", () => {
     expect(isSaudi("Senior Accountant, remote USA")).toBe(false);
   });
 });
+
+import { inferEmployment } from "@/lib/feeds";
+describe("employment type", () => {
+  it("detects part-time", () => expect(inferEmployment("مطلوب محاسب دوام جزئي بالرياض")).toBe("دوام جزئي"));
+  it("detects full-time", () => expect(inferEmployment("شاغر وظيفي محاسب دوام كامل")).toBe("دوام كامل"));
+});

@@ -1,8 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
-import { parseFeed, parseJson, dedupe, isAccounting, isSaudi, toOpportunity, type RawItem } from "./feeds";
+import { parseFeed, parseJson, dedupe, isAccounting, isSaudi, toOpportunity, parseLinkedIn, inferEmployment, type RawItem } from "./feeds";
+import type { Employment } from "./opportunities";
 
 type In = { sources: { name: string; url: string; type: "RSS" | "Webhook" }[] };
-type Item = RawItem & { sourceName: string; location?: string };
+type Item = RawItem & { sourceName: string; location?: string; employment?: Employment };
 type Status = { name: string; url: string; ok: boolean; count: number; error: string | null; builtIn: boolean };
 
 function safeUrl(raw: string) {
@@ -48,6 +49,7 @@ async function fetchHaraj(): Promise<Item[]> {
           publishedAt: p.updateDate || p.postDate ? new Date(Number(p.updateDate || p.postDate) * 1000).toISOString() : null,
           sourceName: "حراج",
           location: p.city ? `حراج · ${p.city}` : "حراج",
+          employment: inferEmployment(`${title} ${body}`),
         });
       }
     }),
@@ -55,8 +57,40 @@ async function fetchHaraj(): Promise<Item[]> {
   return out;
 }
 
-// Saudi Arabia only: Haraj is the sole built-in source; user sources are filtered by isSaudi.
-const BUILT_IN_RSS: { name: string; url: string }[] = [];
+// ---- LinkedIn public job search, location = Saudi Arabia (companies hiring accountants) ----
+const LI_KEYWORDS = ["accountant", "محاسب", "bookkeeper", "accounting"];
+const LI_TYPES: [string, Employment][] = [["F", "دوام كامل"], ["P", "دوام جزئي"], ["C", "دوام جزئي"]];
+
+async function fetchLinkedIn(): Promise<Item[]> {
+  const out: Item[] = [];
+  await Promise.all(
+    LI_KEYWORDS.flatMap((k) => LI_TYPES.map(([jt, emp]) => ({ k, jt, emp }))).map(async ({ k, jt, emp }) => {
+      const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(k)}&location=Saudi%20Arabia&f_JT=${jt}&f_TPR=r2592000`;
+      const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36" } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      for (const j of parseLinkedIn(await res.text())) {
+        if (!isSaudi(`${j.location} Saudi`) || !isAccounting(j.title)) continue;
+        out.push({
+          title: j.title,
+          description: `${j.company} تبحث عن ${j.title} — ${j.location}`,
+          link: j.link,
+          publishedAt: j.date ? new Date(j.date).toISOString() : null,
+          sourceName: "لينكدإن",
+          location: `${j.company} · ${j.location}`,
+          employment: emp,
+        });
+      }
+    }),
+  );
+  return out;
+}
+
+// Freelancer projects are global; keep only ones that mention Saudi Arabia.
+const BUILT_IN_RSS: { name: string; url: string }[] = [
+  { name: "Freelancer", url: "https://www.freelancer.com/rss/job_accounting.xml" },
+  { name: "Freelancer", url: "https://www.freelancer.com/rss/job_bookkeeping.xml" },
+  { name: "Freelancer", url: "https://www.freelancer.com/rss/job_zakat.xml" },
+];
 
 async function fetchUrl(url: string, name: string, trusted: boolean): Promise<Item[]> {
   const res = await fetch(safeUrl(url), {
@@ -68,6 +102,7 @@ async function fetchUrl(url: string, name: string, trusted: boolean): Promise<It
   const items = t.startsWith("{") || t.startsWith("[") ? parseJson(JSON.parse(t)) : parseFeed(body);
   return items
     .filter((i) => i.title && i.link && (trusted || isAccounting(`${i.title} ${i.description}`)) && isSaudi(`${i.title} ${i.description} ${i.link}`))
+    .map((i) => ({ ...i, employment: name === "Freelancer" ? ("دوام جزئي" as Employment) : inferEmployment(`${i.title} ${i.description}`) }))
     .map((i) => ({ ...i, sourceName: name }));
 }
 
@@ -91,7 +126,8 @@ export const fetchSources = createServerFn({ method: "POST" })
 
     await Promise.all([
       run("حراج", "https://haraj.com.sa", true, fetchHaraj),
-      ...BUILT_IN_RSS.map((s) => run(s.name, s.url, true, () => fetchUrl(s.url, s.name, true))),
+      run("لينكدإن", "https://www.linkedin.com/jobs", true, fetchLinkedIn),
+      ...BUILT_IN_RSS.map((s) => run(`${s.name} (${s.url.split("job_")[1]?.replace(".xml", "")})`, s.url, true, () => fetchUrl(s.url, s.name, true))),
       ...data.sources.map((s) => run(s.name, s.url, false, () => fetchUrl(s.url, s.name, false))),
     ]);
 

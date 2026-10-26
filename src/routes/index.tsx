@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { SourcesStatus } from "@/components/LiveSourcesPanel";
 import { useLiveSources } from "@/lib/use-live-sources";
-import { SKILLS, URGENCIES, matchesKeywords, type Opportunity } from "@/lib/opportunities";
+import { SKILLS, URGENCIES, EMPLOYMENTS, matchesKeywords, type Opportunity } from "@/lib/opportunities";
 import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 
@@ -42,17 +42,19 @@ function Dashboard() {
   const [budget, setBudget] = useState("all");
   const [urgency, setUrgency] = useState("all");
   const [platform, setPlatform] = useState("all");
+  const [employment, setEmployment] = useState("all");
 
   const list = useMemo(() => SEED.filter((o) => {
     if (query && !`${o.title} ${o.description} ${o.client} ${o.tools?.join(" ")}`.includes(query)) return false;
     if (skills.length && !skills.some((s) => o.skills.includes(s as any))) return false;
     if (urgency !== "all" && o.urgency !== urgency) return false;
     if (platform !== "all" && o.platform !== platform) return false;
+    if (employment !== "all" && o.employment !== employment) return false;
     if (budget === "lt250" && o.budgetMax >= 250) return false;
     if (budget === "250-1000" && (o.budgetMax < 250 || o.budgetMin > 1000)) return false;
     if (budget === "gt1000" && o.budgetMax <= 1000) return false;
     return true;
-  }), [SEED, query, skills, budget, urgency, platform]);
+  }), [SEED, query, skills, budget, urgency, platform, employment]);
 
   const matched = SEED.filter((o) => matchesKeywords(o, settings.keywords)).length;
   const stats = [
@@ -80,13 +82,14 @@ function Dashboard() {
       </section>
 
       <section className="space-y-4 rounded-xl border bg-card p-4">
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-5">
           <div className="relative md:col-span-1">
             <Search className="absolute start-3 top-2.5 size-4 text-muted-foreground" />
             <Input value={query} onChange={(e) => setQ(e.target.value)} placeholder="ابحث: ساب، زكاة، فودكس..." className="ps-9" />
           </div>
           <Filter value={budget} onChange={setBudget} items={BUDGETS} />
           <Filter value={urgency} onChange={setUrgency} items={[{ v: "all", l: "كل مستويات الإلحاح" }, ...URGENCIES.map((u) => ({ v: u, l: u }))]} />
+          <Filter value={employment} onChange={setEmployment} items={[{ v: "all", l: "كل أنواع الدوام" }, ...EMPLOYMENTS.map((u) => ({ v: u, l: u }))]} />
           <Filter value={platform} onChange={setPlatform} items={[{ v: "all", l: "كل المنصات" }, ...PLATFORMS.map((u) => ({ v: u, l: u }))]} />
         </div>
         <div className="flex flex-wrap gap-2">
