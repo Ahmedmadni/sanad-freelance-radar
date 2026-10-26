@@ -104,9 +104,9 @@ export function dedupe<T extends { title: string; link: string }>(items: T[]): T
   return out;
 }
 
-export function toOpportunity(it: RawItem & { sourceName: string }, idx: number): Opportunity {
+export function toOpportunity(it: RawItem & { sourceName: string; location?: string }, idx: number): Opportunity {
   const text = `${it.title} ${it.description}`;
-  const nums = (text.match(/\$?\s?(\d{2,6})\s?(?:\$|دولار|USD)/g) ?? []).map((n) => Number(n.replace(/\D/g, "")));
+  const nums = [...text.matchAll(/(?:\$|SAR|ريال)\s?(\d{2,6})|(\d{2,6})\s?(?:\$|دولار|USD|ريال|SAR)/g)].map((m) => Number(m[1] ?? m[2]));
   const min = nums.length ? Math.min(...nums) : 0;
   const max = nums.length ? Math.max(...nums) : 0;
   const mins = it.publishedAt ? Math.max(0, Math.round((Date.now() - Date.parse(it.publishedAt)) / 60000)) : 0;
@@ -121,7 +121,7 @@ export function toOpportunity(it: RawItem & { sourceName: string }, idx: number)
     urgency: /عاجل|urgent|فوري/i.test(text) ? "عاجل" : "عادي",
     postedMinutesAgo: mins,
     offers: 0,
-    client: it.sourceName,
+    client: it.location ?? it.sourceName,
     url: it.link,
     sourceName: it.sourceName,
     publishedAt: it.publishedAt,

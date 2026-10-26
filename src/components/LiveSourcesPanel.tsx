@@ -1,43 +1,31 @@
-import { Link } from "@tanstack/react-router";
-import { RefreshCw, Rss, AlertCircle } from "lucide-react";
+import { RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { OpportunityCard } from "@/components/OpportunityCard";
-import { useLiveSources, formatDate } from "@/lib/use-live-sources";
-import type { Settings } from "@/lib/settings";
+import { formatDate } from "@/lib/use-live-sources";
+import type { useLiveSources } from "@/lib/use-live-sources";
 
-export function LiveSourcesPanel({ settings, columns = true }: { settings: Settings; columns?: boolean }) {
-  const q = useLiveSources(settings.sources);
-  if (!settings.sources.length) {
-    return (
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed bg-card p-5 text-sm text-muted-foreground">
-        <Rss className="size-5 text-primary" />
-        لم تضف أي مصدر بعد. أضف روابط RSS أو JSON لجلب الفرص الحقيقية.
-        <Button size="sm" variant="outline" className="ms-auto" asChild><Link to="/settings">إضافة مصدر</Link></Button>
-      </div>
-    );
-  }
+/** Status bar: last update, counts, duplicates removed, per-source health. */
+export function SourcesStatus({ q }: { q: ReturnType<typeof useLiveSources> }) {
   const d = q.data;
   return (
-    <section className="space-y-4">
+    <div className="space-y-2 rounded-xl border bg-card p-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-xl font-bold">فرص حقيقية من مصادرك</h2>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           آخر تحديث: {d ? formatDate(d.fetchedAt) : "—"}
-          {d && ` · ${d.items.length} فرصة · حُذف ${d.duplicatesRemoved} مكرر`}
+          {d && ` · ${d.items.length} فرصة حقيقية · حُذف ${d.duplicatesRemoved} مكرر`}
         </span>
         <Button size="sm" variant="outline" className="ms-auto" onClick={() => q.refetch()} disabled={q.isFetching}>
           <RefreshCw className={`size-4 ${q.isFetching ? "animate-spin" : ""}`} />تحديث
         </Button>
       </div>
-      {d?.statuses.filter((s) => !s.ok).map((s) => (
-        <p key={s.url} className="flex items-center gap-2 text-sm text-destructive"><AlertCircle className="size-4" />{s.name}: {s.error}</p>
-      ))}
-      {q.isError && <p className="text-sm text-destructive">{(q.error as Error).message}</p>}
-      {q.isLoading && <p className="py-8 text-center text-muted-foreground">جارٍ جلب الفرص...</p>}
-      {d && !d.items.length && <p className="py-8 text-center text-muted-foreground">لا توجد فرص محاسبة في المصادر حالياً.</p>}
-      <div className={columns ? "grid gap-5 md:grid-cols-2 xl:grid-cols-3" : "mx-auto grid max-w-3xl gap-4"}>
-        {d?.items.map((o) => <OpportunityCard key={o.id} o={o} settings={settings} />)}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        {d?.statuses.map((s) => (
+          <span key={s.url} className={s.ok ? "flex items-center gap-1 text-muted-foreground" : "flex items-center gap-1 text-destructive"}>
+            {s.ok ? <CheckCircle2 className="size-3 text-primary" /> : <AlertCircle className="size-3" />}
+            {s.name}: {s.ok ? `${s.count}` : s.error}
+          </span>
+        ))}
       </div>
-    </section>
+      {q.isError && <p className="text-sm text-destructive">{(q.error as Error).message}</p>}
+    </div>
   );
 }
