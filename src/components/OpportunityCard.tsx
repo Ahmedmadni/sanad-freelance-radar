@@ -36,7 +36,18 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
           budget: o.budgetMax > 0 ? `${o.budgetMin} - ${o.budgetMax} $` : "غير محددة",
           client: o.client,
           name: settings.freelancerName,
-          bio: settings.bio,
+          bio: [
+            settings.bio,
+            settings.jobTitle && `المسمى: ${settings.jobTitle}`,
+            settings.experienceYears && `سنوات الخبرة: ${settings.experienceYears}`,
+            settings.certifications && `الشهادات: ${settings.certifications}`,
+            settings.city && `المدينة: ${settings.city}`,
+            settings.phone && `الجوال: ${settings.phone}`,
+            settings.whatsapp && `واتساب: ${settings.whatsapp}`,
+            settings.email && `البريد: ${settings.email}`,
+            settings.linkedin && `لينكدإن: ${settings.linkedin}`,
+            settings.website && `الموقع: ${settings.website}`,
+          ].filter(Boolean).join("\n"),
         },
       });
       setText(r.text);
