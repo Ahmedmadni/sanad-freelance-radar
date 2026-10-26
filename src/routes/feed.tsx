@@ -10,7 +10,7 @@ export const Route = createFileRoute("/feed")({
   head: () => ({
     meta: [
       { title: "التغذية المباشرة | رادار فرص المحاسبة" },
-      { name: "description", content: "أحدث طلبات المحاسبة الحقيقية من حراج وFreelancer ومصادرك، تتحدث كل 5 دقائق." },
+      { name: "description", content: "أحدث طلبات المحاسبة الحقيقية في السعودية من حراج ومصادرك، تتحدث كل 5 دقائق." },
       { property: "og:title", content: "التغذية المباشرة للفرص" },
       { property: "og:description", content: "طلبات محاسبة حقيقية مرتبة من الأحدث." },
       { property: "og:type", content: "website" },

@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { parseFeed, parseJson, dedupe, isAccounting, toOpportunity, type RawItem } from "./feeds";
+import { parseFeed, parseJson, dedupe, isAccounting, isSaudi, toOpportunity, type RawItem } from "./feeds";
 
 type In = { sources: { name: string; url: string; type: "RSS" | "Webhook" }[] };
 type Item = RawItem & { sourceName: string; location?: string };
@@ -55,10 +55,8 @@ async function fetchHaraj(): Promise<Item[]> {
   return out;
 }
 
-const BUILT_IN_RSS = [
-  { name: "Freelancer (محاسبة)", url: "https://www.freelancer.com/rss/job_accounting.xml" },
-  { name: "Freelancer (مسك دفاتر)", url: "https://www.freelancer.com/rss/job_bookkeeping.xml" },
-];
+// Saudi Arabia only: Haraj is the sole built-in source; user sources are filtered by isSaudi.
+const BUILT_IN_RSS: { name: string; url: string }[] = [];
 
 async function fetchUrl(url: string, name: string, trusted: boolean): Promise<Item[]> {
   const res = await fetch(safeUrl(url), {
@@ -69,7 +67,7 @@ async function fetchUrl(url: string, name: string, trusted: boolean): Promise<It
   const t = body.trimStart();
   const items = t.startsWith("{") || t.startsWith("[") ? parseJson(JSON.parse(t)) : parseFeed(body);
   return items
-    .filter((i) => i.title && i.link && (trusted || isAccounting(`${i.title} ${i.description}`)))
+    .filter((i) => i.title && i.link && (trusted || isAccounting(`${i.title} ${i.description}`)) && isSaudi(`${i.title} ${i.description} ${i.link}`))
     .map((i) => ({ ...i, sourceName: name }));
 }
 

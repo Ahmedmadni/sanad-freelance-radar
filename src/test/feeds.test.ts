@@ -46,3 +46,15 @@ describe("telegram alerts", () => {
     expect(pickAlerts([opp("تدقيق حسابات", 100), opp("تدقيق مخزون", 0)], ["تدقيق"], 200, new Set())).toHaveLength(1);
   });
 });
+
+import { isSaudi } from "@/lib/feeds";
+describe("saudi only", () => {
+  it("keeps Saudi opportunities", () => {
+    expect(isSaudi("مطلوب محاسب في الرياض")).toBe(true);
+    expect(isSaudi("Bookkeeper needed, Riyadh KSA")).toBe(true);
+  });
+  it("drops opportunities outside Saudi Arabia", () => {
+    expect(isSaudi("مطلوب محاسب في القاهرة")).toBe(false);
+    expect(isSaudi("Senior Accountant, remote USA")).toBe(false);
+  });
+});

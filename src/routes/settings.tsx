@@ -94,7 +94,7 @@ function SettingsPage() {
         </form>
       </Card>
 
-      <Card title="مصادر RSS و Webhook" desc="أضف رابط خلاصة RSS/Atom، أو رابط Webhook يُرجع JSON (قائمة فيها title وdescription وurl). تُجلب الفرص كل 5 دقائق وتُحذف المكررات.">
+      <Card title="مصادر RSS و Webhook" desc="أضف رابط خلاصة RSS/Atom، أو رابط Webhook يُرجع JSON (قائمة فيها title وdescription وurl). تُجلب الفرص كل 5 دقائق وتُحذف المكررات. يُعرض فقط ما يخص السعودية (مدينة سعودية أو ذكر المملكة).">
         {s.sources.map((x) => (
           <div key={x.id} className="flex items-center gap-3 rounded-lg border p-3">
             <Badge variant="outline">{x.type}</Badge>

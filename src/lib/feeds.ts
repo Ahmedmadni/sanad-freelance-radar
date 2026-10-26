@@ -139,3 +139,10 @@ export function pickAlerts(items: Opportunity[], keywords: string[], minBudget: 
     return keywords.some((k) => text.includes(k.toLowerCase()) || k.split(" ").some((w) => w.length > 2 && text.includes(w.toLowerCase())));
   });
 }
+
+const SAUDI = /السعودي|السعودية|المملكة|الرياض|جدة|جده|مكة|مكه|المدينة المنورة|الدمام|الخبر|الظهران|الأحساء|الاحساء|القصيم|بريدة|الطائف|تبوك|أبها|ابها|خميس مشيط|جازان|نجران|حائل|الجبيل|ينبع|زاتكا|هيئة الزكاة|\bKSA\b|Saudi|Riyadh|Jeddah|Dammam|Khobar|\.sa\//i;
+
+/** True only when the text clearly points to Saudi Arabia (city, country, ZATCA, or a .sa link). */
+export function isSaudi(text: string) {
+  return SAUDI.test(text);
+}
