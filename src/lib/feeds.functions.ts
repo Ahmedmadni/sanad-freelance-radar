@@ -58,6 +58,42 @@ async function fetchHaraj(): Promise<Item[]> {
   return out;
 }
 
+// ---- OpenSooq Saudi (السوق المفتوح): job vacancies + "wanted" posts only, never service ads ----
+const OS_TERMS = ["مطلوب محاسب", "محاسب", "محاسبة", "مسك دفاتر"];
+async function fetchOpenSooq(): Promise<Item[]> {
+  const out: Item[] = [];
+  await Promise.all(
+    OS_TERMS.map(async (term) => {
+      const res = await fetch(`https://sa.opensooq.com/ar/find?term=${encodeURIComponent(term)}`, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ar" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const html = await res.text();
+      const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+      if (!m?.[1]) return;
+      const items: any[] = JSON.parse(m[1])?.props?.pageProps?.serpApiResponse?.listings?.items ?? [];
+      for (const x of items) {
+        const title = String(x.title ?? "");
+        const body = String(x.masked_description ?? "");
+        const head = `${title} ${body}`;
+        const isVacancy = x.cat2_code === "JobPoster";
+        const isWanted = WANTS.test(head) && !["Services", "ComputerAndLaptops", "BusinessIndustrial"].includes(x.cat1_code);
+        if (!(isVacancy || isWanted) || !ACC.test(title) || SELF_AD.test(title)) continue;
+        out.push({
+          title,
+          description: body,
+          link: `https://sa.opensooq.com/ar/search/${x.id}`,
+          publishedAt: x.inserted_date ? new Date(x.inserted_date).toISOString() : null,
+          sourceName: "السوق المفتوح",
+          location: x.city_label ? `السوق المفتوح · ${x.city_label}` : "السوق المفتوح",
+          employment: inferEmployment(head),
+        });
+      }
+    }),
+  );
+  return out;
+}
+
 // ---- LinkedIn public job search, location = Saudi Arabia (companies hiring accountants) ----
 const LI_KEYWORDS = ["accountant", "محاسب", "bookkeeper", "accounting"];
 
@@ -129,6 +165,7 @@ export const fetchSources = createServerFn({ method: "POST" })
     await Promise.all([
       run("حراج", "https://haraj.com.sa", true, fetchHaraj),
       run("لينكدإن", "https://www.linkedin.com/jobs", true, fetchLinkedIn),
+      run("السوق المفتوح", "https://sa.opensooq.com", true, fetchOpenSooq),
       ...BUILT_IN_RSS.map((s) => run(`${s.name} (${s.url.split("job_")[1]?.replace(".xml", "")})`, s.url, true, () => fetchUrl(s.url, s.name, true))),
       ...data.sources.map((s) => run(s.name, s.url, false, () => fetchUrl(s.url, s.name, false))),
     ]);
