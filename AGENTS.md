@@ -12,3 +12,4 @@
 ## Architecture
 - Opportunity data is sample data in `src/lib/opportunities.ts`; settings persist in browser localStorage via `useSettings` — no backend database yet.
 - AI proposals and Telegram sends run in server functions (`src/lib/ai.functions.ts`) so keys never reach the browser.
+- Telegram auto-alerts run client-side in `useTelegramAlerts` (mounted in AppShell) while the app is open; sent IDs live in localStorage. Moving to background alerts requires Lovable Cloud + scheduled job.
