@@ -34,15 +34,21 @@ export const DEFAULT_SETTINGS: Settings = {
 export function useSettings() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
-    } catch {}
+    const load = () => {
+      try {
+        const raw = localStorage.getItem(KEY);
+        if (raw) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
+      } catch {}
+    };
+    load();
+    window.addEventListener("gig-settings", load);
+    return () => window.removeEventListener("gig-settings", load);
   }, []);
   const update = (patch: Partial<Settings>) =>
     setSettings((s) => {
       const next = { ...s, ...patch };
       localStorage.setItem(KEY, JSON.stringify(next));
+      setTimeout(() => window.dispatchEvent(new Event("gig-settings")), 0);
       return next;
     });
   return [settings, update] as const;
