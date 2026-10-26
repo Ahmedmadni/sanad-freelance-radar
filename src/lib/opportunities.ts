@@ -16,6 +16,8 @@ export interface Opportunity {
   offers: number;
   client: string;
   url: string;
+  sourceName?: string;
+  publishedAt?: string | null;
 }
 
 export const PLATFORMS: Platform[] = ["مستقل", "خمسات", "بعيد", "كفيل", "نبض"];
