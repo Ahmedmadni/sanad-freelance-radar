@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Copy, ExternalLink, Sparkles, Loader2, Clock, Users } from "lucide-react";
+import { Copy, ExternalLink, Sparkles, Loader2, Clock, Users, MessageCircle } from "lucide-react";
+import { extractSaudiPhone, waLink } from "@/lib/whatsapp";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -23,6 +24,16 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const phone = extractSaudiPhone(`${o.title} ${o.description}`);
+  const waMessage = (proposal: string) =>
+    [
+      `السلام عليكم، بخصوص إعلانكم: ${o.title}`,
+      o.url && `رابط الإعلان: ${o.url}`,
+      proposal,
+      !proposal && `معكم ${settings.freelancerName}${settings.jobTitle ? ` - ${settings.jobTitle}` : ""}، وأرغب بتقديم خدماتي.`,
+      settings.phone && `جوالي: ${settings.phone}`,
+      settings.email && `بريدي: ${settings.email}`,
+    ].filter(Boolean).join("\n\n");
 
   async function run() {
     setOpen(true);
@@ -83,12 +94,22 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
           <span>التحديث: {formatDate(o.publishedAt)}</span>
         </div>
       )}
+      {phone && (
+        <div className="mt-3 flex items-center gap-2 text-xs">
+          <MessageCircle className="size-3.5 text-primary" />
+          <span className="text-muted-foreground">واتساب المعلن:</span>
+          <a href={waLink(phone, "")} target="_blank" rel="noreferrer" className="font-mono text-primary hover:underline" dir="ltr">+{phone}</a>
+        </div>
+      )}
       <div className="mt-4 flex flex-wrap items-center gap-3 border-t pt-4">
         {o.budgetMax > 0 ? <div className="font-mono text-base font-semibold text-primary" dir="ltr">${o.budgetMin} – ${o.budgetMax}</div> : <div className="text-sm text-muted-foreground">الميزانية غير محددة</div>}
         <span className="flex items-center gap-1 text-xs text-muted-foreground"><Users className="size-3" />{o.offers} عروض</span>
         <div className="ms-auto flex gap-2">
           <Button size="sm" variant="ghost" asChild>
             <a href={o.url} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /></a>
+          </Button>
+          <Button size="sm" variant="outline" asChild>
+            <a href={waLink(phone, waMessage(""))} target="_blank" rel="noreferrer"><MessageCircle className="size-4" />واتساب</a>
           </Button>
           <Button size="sm" onClick={run}><Sparkles className="size-4" />ولّد عرضاً</Button>
         </div>
@@ -98,7 +119,7 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
         <DialogContent className="max-w-2xl" dir="rtl">
           <DialogHeader className="text-start">
             <DialogTitle className="font-display">عرض مقترح: {o.title}</DialogTitle>
-            <DialogDescription>يمكنك تعديل النص قبل نسخه.</DialogDescription>
+            <DialogDescription>يمكنك تعديل النص قبل نسخه أو إرساله على واتساب.</DialogDescription>
           </DialogHeader>
           {loading ? (
             <div className="flex h-60 items-center justify-center gap-2 text-muted-foreground">
@@ -107,13 +128,20 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
           ) : (
             <Textarea value={text} onChange={(e) => setText(e.target.value)} className="min-h-72 leading-loose" />
           )}
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="me-auto text-xs text-muted-foreground">
+              {phone ? `سيُرسل إلى المعلن: +${phone}` : "لا يوجد رقم في الإعلان — ستختار جهة الاتصال في واتساب"}
+            </span>
             <Button variant="outline" onClick={run} disabled={loading}>إعادة التوليد</Button>
             <Button
+              variant="outline"
               disabled={loading || !text}
               onClick={() => { navigator.clipboard.writeText(text); toast.success("تم نسخ العرض"); }}
             >
               <Copy className="size-4" />نسخ
+            </Button>
+            <Button disabled={loading || !text} asChild={!loading && !!text}>
+              <a href={waLink(phone, waMessage(text))} target="_blank" rel="noreferrer"><MessageCircle className="size-4" />إرسال على واتساب</a>
             </Button>
           </div>
         </DialogContent>
