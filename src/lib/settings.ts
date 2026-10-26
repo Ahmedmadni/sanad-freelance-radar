@@ -17,6 +17,15 @@ export interface Settings {
   sources: Source[];
   freelancerName: string;
   bio: string;
+  jobTitle: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  city: string;
+  linkedin: string;
+  website: string;
+  experienceYears: string;
+  certifications: string;
 }
 
 const KEY = "gig-radar-settings";
@@ -29,6 +38,15 @@ export const DEFAULT_SETTINGS: Settings = {
   sources: [],
   freelancerName: "أحمد المدني",
   bio: "محاسب مستقل بخبرة في مسك الدفاتر وإعداد القوائم المالية والزكاة والضريبة وبرامج ERP مثل قيود ودفترة وفودكس وساب.",
+  jobTitle: "محاسب مستقل",
+  phone: "",
+  whatsapp: "",
+  email: "",
+  city: "",
+  linkedin: "",
+  website: "",
+  experienceYears: "",
+  certifications: "",
 };
 
 export function useSettings() {

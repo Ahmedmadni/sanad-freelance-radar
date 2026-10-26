@@ -116,8 +116,26 @@ function SettingsPage() {
         </div>
       </Card>
 
-      <Card title="ملفك المهني" desc="يُستخدم في توليد عروض التقديم.">
-        <div className="space-y-2"><Label>الاسم</Label><Input value={s.freelancerName} onChange={(e) => update({ freelancerName: e.target.value })} /></div>
+      <Card title="البيانات الشخصية والملف المهني" desc="تُضاف تلقائياً إلى عروض التقديم (الاسم ووسائل التواصل والخبرة). تُحفظ في متصفحك فقط.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {([
+            ["freelancerName", "الاسم الكامل", "text", ""],
+            ["jobTitle", "المسمى المهني", "text", "محاسب قانوني"],
+            ["phone", "رقم الجوال", "tel", "05xxxxxxxx"],
+            ["whatsapp", "واتساب", "tel", "9665xxxxxxxx"],
+            ["email", "البريد الإلكتروني", "email", "name@example.com"],
+            ["city", "المدينة", "text", "الرياض"],
+            ["experienceYears", "سنوات الخبرة", "text", "8"],
+            ["linkedin", "رابط لينكدإن", "url", "https://linkedin.com/in/..."],
+            ["website", "الموقع / معرض الأعمال", "url", "https://"],
+            ["certifications", "الشهادات المهنية", "text", "SOCPA، CMA"],
+          ] as const).map(([k, label, type, ph]) => (
+            <div key={k} className="space-y-2">
+              <Label>{label}</Label>
+              <Input type={type} dir={type === "text" ? undefined : "ltr"} placeholder={ph} value={s[k]} onChange={(e) => update({ [k]: e.target.value })} />
+            </div>
+          ))}
+        </div>
         <div className="space-y-2"><Label>نبذة وخبرات</Label><Textarea value={s.bio} onChange={(e) => update({ bio: e.target.value })} className="min-h-28" /></div>
       </Card>
     </div>
