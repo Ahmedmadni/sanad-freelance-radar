@@ -129,6 +129,47 @@ async function fetchMourjan(): Promise<Item[]> {
   return out;
 }
 
+// ---- Kafiil (كفيل) freelance projects: buyers posting projects, filtered to accounting + Saudi ----
+const KF_PAGES = [
+  "https://kafiil.com/projects/business-consulting-and-management-services-2?open=1",
+  "https://kafiil.com/projects/other-things-2?open=1",
+  "https://kafiil.com/projects/training-education-and-remote-assistance-2?open=1",
+];
+async function fetchKafiil(): Promise<Item[]> {
+  const out: Item[] = [];
+  await Promise.all(
+    KF_PAGES.map(async (url) => {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ar" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const html = await res.text();
+      for (const block of html.split("project-box active").slice(1)) {
+        // Skip completed/closed projects — only open ones are opportunities.
+        if (/مكتمل|قيد التنفيذ|منفذ/.test(block.match(/<span class="tag[^"]*">([^<]*)<\/span>/)?.[1] ?? "")) continue;
+        const link = block.match(/href="(https:\/\/kafiil\.com\/project\/[^"]+)"/)?.[1];
+        const title = block.match(/class="name bold-text[^"]*"[\s\S]*?<\/a>/)?.[0]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().replace(/^(مكتمل|مفتوح|قيد التنفيذ|منفذ)\s+/, "");
+        const when = block.match(/fa-clock[\s\S]{0,80}?(منذ[^<]+)/)?.[1]?.trim() ?? "";
+        const price = block.match(/class="price"[^>]*>([\s\S]*?)<\/p>/)?.[1]?.replace(/<[^>]+>/g, " ").trim() ?? "";
+        const desc = block.match(/class="info-content"[^>]*>([\s\S]*?)<\/p>/)?.[1]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() ?? "";
+        if (!link || !title) continue;
+        const head = `${title} ${desc}`;
+        if (!ACC.test(head) || SELF_AD.test(head.slice(0, 120)) || !isSaudi(head)) continue;
+        out.push({
+          title,
+          description: `${desc}${price ? ` — الميزانية: ${price}` : ""}`.slice(0, 600),
+          link,
+          publishedAt: arRelative(when),
+          sourceName: "كفيل",
+          location: "كفيل",
+          employment: "دوام جزئي",
+        });
+      }
+    }),
+  );
+  return out;
+}
+
 // ---- LinkedIn public job search, location = Saudi Arabia (companies hiring accountants) ----
 const LI_KEYWORDS = ["accountant", "محاسب", "bookkeeper", "accounting"];
 
@@ -202,6 +243,7 @@ export const fetchSources = createServerFn({ method: "POST" })
       run("لينكدإن", "https://www.linkedin.com/jobs", true, fetchLinkedIn),
       run("السوق المفتوح", "https://sa.opensooq.com", true, fetchOpenSooq),
       run("مرجان", "https://www.mourjan.com/sa/accounting/vacancies/", true, fetchMourjan),
+      run("كفيل", "https://kafiil.com/projects", true, fetchKafiil),
       ...BUILT_IN_RSS.map((s) => run(`${s.name} (${s.url.split("job_")[1]?.replace(".xml", "")})`, s.url, true, () => fetchUrl(s.url, s.name, true))),
       ...data.sources.map((s) => run(s.name, s.url, false, () => fetchUrl(s.url, s.name, false))),
     ]);
