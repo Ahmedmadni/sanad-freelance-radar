@@ -131,11 +131,9 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
               <a href={waLink(phone, message(""))} target="_blank" rel="noreferrer"><MessageCircle className="size-4" />واتساب</a>
             </Button>
           )}
-          {email && (
-            <Button size="sm" variant="outline" asChild>
-              <a href={mailtoLink(email, `بخصوص إعلانكم: ${o.title}`, message(""))}><Mail className="size-4" />بريد</a>
-            </Button>
-          )}
+          <Button size="sm" variant="outline" asChild>
+            <a href={mailtoLink(email ?? "", `بخصوص إعلانكم: ${o.title}`, message(""))}><Mail className="size-4" />بريد</a>
+          </Button>
           <Button size="sm" onClick={run}><Sparkles className="size-4" />ولّد عرضاً</Button>
         </div>
       </div>
@@ -147,7 +145,7 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
             <DialogDescription>
               {phone || email
                 ? "يمكنك تعديل النص قبل نسخه أو إرساله للمعلن."
-                : "لا يوجد رقم أو بريد في الإعلان — يمكنك نسخ العرض وإرساله من صفحة الإعلان."}
+                : "لا يوجد رقم أو بريد داخل نص الإعلان — زر البريد يفتح رسالة جاهزة لتضيف إليها بريد المعلن."}
             </DialogDescription>
           </DialogHeader>
           {loading ? (
@@ -159,13 +157,9 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
           )}
           <div className="flex flex-wrap items-center justify-end gap-2">
             <span className="me-auto text-xs text-muted-foreground">
-              {phone && email
-                ? `سيُرسل إلى: +${phone} أو ${email}`
-                : phone
-                  ? `سيُرسل إلى المعلن: +${phone}`
-                  : email
-                    ? `سيُرسل إلى المعلن: ${email}`
-                    : "لا توجد وسيلة تواصل مباشرة في الإعلان"}
+              {phone || email
+                ? `سيُرسل إلى: ${[phone && `واتساب +${phone}`, email && `بريد ${email}`].filter(Boolean).join(" أو ")}`
+                : "املأ بريد المعلن في نافذة البريد — النص جاهز"}
             </span>
             <Button variant="outline" onClick={run} disabled={loading}>إعادة التوليد</Button>
             <Button
@@ -180,11 +174,9 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
                 <a href={waLink(phone, message(text))} target="_blank" rel="noreferrer"><MessageCircle className="size-4" />إرسال على واتساب</a>
               </Button>
             )}
-            {email && (
-              <Button variant={phone ? "outline" : "default"} disabled={loading || !text} asChild={!loading && !!text}>
-                <a href={mailtoLink(email, `بخصوص إعلانكم: ${o.title}`, message(text))}><Mail className="size-4" />إرسال بالبريد</a>
-              </Button>
-            )}
+            <Button variant={phone ? "outline" : "default"} disabled={loading || !text} asChild={!loading && !!text}>
+              <a href={mailtoLink(email ?? "", `بخصوص إعلانكم: ${o.title}`, message(text))}><Mail className="size-4" />إرسال بالبريد</a>
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

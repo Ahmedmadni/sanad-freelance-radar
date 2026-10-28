@@ -35,4 +35,9 @@ describe("email", () => {
       "mailto:a@b.co?subject=%D8%B9%D9%86%D9%88%D8%A7%D9%86&body=%D9%86%D8%B5",
     );
   });
+  it("opens a blank message with no address when the ad hides one", () => {
+    expect(mailtoLink("", "عنوان", "نص")).toBe(
+      "mailto:?subject=%D8%B9%D9%86%D9%88%D8%A7%D9%86&body=%D9%86%D8%B5",
+    );
+  });
 });

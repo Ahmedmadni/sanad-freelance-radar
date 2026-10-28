@@ -54,6 +54,11 @@ export function extractEmail(text: string): string | null {
   return null;
 }
 
+/** Builds a mailto link. An empty address opens a blank message with subject/body ready. */
 export function mailtoLink(email: string, subject: string, body: string): string {
-  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const q = [
+    subject && `subject=${encodeURIComponent(subject)}`,
+    body && `body=${encodeURIComponent(body)}`,
+  ].filter(Boolean).join("&");
+  return `mailto:${email}${q ? `?${q}` : ""}`;
 }
