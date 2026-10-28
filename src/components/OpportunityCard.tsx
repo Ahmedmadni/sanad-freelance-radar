@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Copy, ExternalLink, Sparkles, Loader2, Clock, Users, MessageCircle } from "lucide-react";
-import { extractSaudiPhone, waLink } from "@/lib/whatsapp";
+import { Copy, ExternalLink, Sparkles, Loader2, Clock, Users, MessageCircle, Mail } from "lucide-react";
+import { extractSaudiPhone, extractEmail, waLink, mailtoLink } from "@/lib/contacts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -24,15 +24,22 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
-  const phone = extractSaudiPhone(`${o.title} ${o.description}`);
-  const waMessage = (proposal: string) =>
+  const adText = `${o.title} ${o.description}`;
+  const phone = extractSaudiPhone(adText);
+  const email = extractEmail(adText);
+
+  const signature = [
+    settings.freelancerName && `معكم ${settings.freelancerName}${settings.jobTitle ? ` - ${settings.jobTitle}` : ""}`,
+    settings.phone && `جوالي: ${settings.phone}`,
+    settings.email && `بريدي: ${settings.email}`,
+  ].filter(Boolean).join("\n");
+
+  const message = (proposal: string) =>
     [
       `السلام عليكم، بخصوص إعلانكم: ${o.title}`,
       o.url && `رابط الإعلان: ${o.url}`,
-      proposal,
-      !proposal && `معكم ${settings.freelancerName}${settings.jobTitle ? ` - ${settings.jobTitle}` : ""}، وأرغب بتقديم خدماتي.`,
-      settings.phone && `جوالي: ${settings.phone}`,
-      settings.email && `بريدي: ${settings.email}`,
+      proposal || `أرغب بتقديم خدماتي المحاسبية لهذا الطلب.`,
+      signature,
     ].filter(Boolean).join("\n\n");
 
   async function run() {
@@ -94,11 +101,22 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
           <span>التحديث: {formatDate(o.publishedAt)}</span>
         </div>
       )}
-      {phone && (
-        <div className="mt-3 flex items-center gap-2 text-xs">
-          <MessageCircle className="size-3.5 text-primary" />
-          <span className="text-muted-foreground">واتساب المعلن:</span>
-          <a href={waLink(phone, "")} target="_blank" rel="noreferrer" className="font-mono text-primary hover:underline" dir="ltr">+{phone}</a>
+      {(phone || email) && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          {phone && (
+            <span className="flex items-center gap-2">
+              <MessageCircle className="size-3.5 text-primary" />
+              <span className="text-muted-foreground">واتساب المعلن:</span>
+              <a href={waLink(phone, "")} target="_blank" rel="noreferrer" className="font-mono text-primary hover:underline" dir="ltr">+{phone}</a>
+            </span>
+          )}
+          {email && (
+            <span className="flex items-center gap-2">
+              <Mail className="size-3.5 text-primary" />
+              <span className="text-muted-foreground">بريد المعلن:</span>
+              <a href={mailtoLink(email, "", "")} className="font-mono text-primary hover:underline" dir="ltr">{email}</a>
+            </span>
+          )}
         </div>
       )}
       <div className="mt-4 flex flex-wrap items-center gap-3 border-t pt-4">
@@ -108,9 +126,16 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
           <Button size="sm" variant="ghost" asChild>
             <a href={o.url} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /></a>
           </Button>
-          <Button size="sm" variant="outline" asChild>
-            <a href={waLink(phone, waMessage(""))} target="_blank" rel="noreferrer"><MessageCircle className="size-4" />واتساب</a>
-          </Button>
+          {phone && (
+            <Button size="sm" variant="outline" asChild>
+              <a href={waLink(phone, message(""))} target="_blank" rel="noreferrer"><MessageCircle className="size-4" />واتساب</a>
+            </Button>
+          )}
+          {email && (
+            <Button size="sm" variant="outline" asChild>
+              <a href={mailtoLink(email, `بخصوص إعلانكم: ${o.title}`, message(""))}><Mail className="size-4" />بريد</a>
+            </Button>
+          )}
           <Button size="sm" onClick={run}><Sparkles className="size-4" />ولّد عرضاً</Button>
         </div>
       </div>
@@ -119,7 +144,11 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
         <DialogContent className="max-w-2xl" dir="rtl">
           <DialogHeader className="text-start">
             <DialogTitle className="font-display">عرض مقترح: {o.title}</DialogTitle>
-            <DialogDescription>يمكنك تعديل النص قبل نسخه أو إرساله على واتساب.</DialogDescription>
+            <DialogDescription>
+              {phone || email
+                ? "يمكنك تعديل النص قبل نسخه أو إرساله للمعلن."
+                : "لا يوجد رقم أو بريد في الإعلان — يمكنك نسخ العرض وإرساله من صفحة الإعلان."}
+            </DialogDescription>
           </DialogHeader>
           {loading ? (
             <div className="flex h-60 items-center justify-center gap-2 text-muted-foreground">
@@ -130,7 +159,13 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
           )}
           <div className="flex flex-wrap items-center justify-end gap-2">
             <span className="me-auto text-xs text-muted-foreground">
-              {phone ? `سيُرسل إلى المعلن: +${phone}` : "لا يوجد رقم في الإعلان — ستختار جهة الاتصال في واتساب"}
+              {phone && email
+                ? `سيُرسل إلى: +${phone} أو ${email}`
+                : phone
+                  ? `سيُرسل إلى المعلن: +${phone}`
+                  : email
+                    ? `سيُرسل إلى المعلن: ${email}`
+                    : "لا توجد وسيلة تواصل مباشرة في الإعلان"}
             </span>
             <Button variant="outline" onClick={run} disabled={loading}>إعادة التوليد</Button>
             <Button
@@ -140,9 +175,16 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
             >
               <Copy className="size-4" />نسخ
             </Button>
-            <Button disabled={loading || !text} asChild={!loading && !!text}>
-              <a href={waLink(phone, waMessage(text))} target="_blank" rel="noreferrer"><MessageCircle className="size-4" />إرسال على واتساب</a>
-            </Button>
+            {phone && (
+              <Button disabled={loading || !text} asChild={!loading && !!text}>
+                <a href={waLink(phone, message(text))} target="_blank" rel="noreferrer"><MessageCircle className="size-4" />إرسال على واتساب</a>
+              </Button>
+            )}
+            {email && (
+              <Button variant={phone ? "outline" : "default"} disabled={loading || !text} asChild={!loading && !!text}>
+                <a href={mailtoLink(email, `بخصوص إعلانكم: ${o.title}`, message(text))}><Mail className="size-4" />إرسال بالبريد</a>
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
