@@ -174,11 +174,9 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
                 <a href={waLink(phone, message(text))} target="_blank" rel="noreferrer"><MessageCircle className="size-4" />إرسال على واتساب</a>
               </Button>
             )}
-            {email && (
-              <Button variant={phone ? "outline" : "default"} disabled={loading || !text} asChild={!loading && !!text}>
-                <a href={mailtoLink(email, `بخصوص إعلانكم: ${o.title}`, message(text))}><Mail className="size-4" />إرسال بالبريد</a>
-              </Button>
-            )}
+            <Button variant={phone ? "outline" : "default"} disabled={loading || !text} asChild={!loading && !!text}>
+              <a href={mailtoLink(email ?? "", `بخصوص إعلانكم: ${o.title}`, message(text))}><Mail className="size-4" />إرسال بالبريد</a>
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
