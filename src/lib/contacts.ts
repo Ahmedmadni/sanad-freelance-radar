@@ -47,7 +47,7 @@ export function extractEmail(text: string): string | null {
     const before = text.slice(Math.max(0, m.index! - 2), m.index);
     // Skip addresses that are part of a URL (e.g. https://x.com/info@page).
     if (before.includes("/") || before.endsWith("//")) continue;
-    const domain = email.split("@")[1].toLowerCase();
+    const domain = email.split("@")[1]?.toLowerCase() ?? "";
     if (PLATFORM_EMAIL_DOMAINS.some((d) => domain === d || domain.endsWith("." + d))) continue;
     return email;
   }
