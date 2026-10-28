@@ -131,8 +131,9 @@ async function fetchMourjan(): Promise<Item[]> {
 
 // ---- Kafiil (كفيل) freelance projects: buyers posting projects, filtered to accounting + Saudi ----
 const KF_PAGES = [
-  "https://kafiil.com/projects/business-consulting-and-management-services-2",
-  "https://kafiil.com/projects/other-things-2",
+  "https://kafiil.com/projects/business-consulting-and-management-services-2?open=1",
+  "https://kafiil.com/projects/other-things-2?open=1",
+  "https://kafiil.com/projects/training-education-and-remote-assistance-2?open=1",
 ];
 async function fetchKafiil(): Promise<Item[]> {
   const out: Item[] = [];
