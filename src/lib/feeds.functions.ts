@@ -242,6 +242,7 @@ export const fetchSources = createServerFn({ method: "POST" })
       run("لينكدإن", "https://www.linkedin.com/jobs", true, fetchLinkedIn),
       run("السوق المفتوح", "https://sa.opensooq.com", true, fetchOpenSooq),
       run("مرجان", "https://www.mourjan.com/sa/accounting/vacancies/", true, fetchMourjan),
+      run("كفيل", "https://kafiil.com/projects", true, fetchKafiil),
       ...BUILT_IN_RSS.map((s) => run(`${s.name} (${s.url.split("job_")[1]?.replace(".xml", "")})`, s.url, true, () => fetchUrl(s.url, s.name, true))),
       ...data.sources.map((s) => run(s.name, s.url, false, () => fetchUrl(s.url, s.name, false))),
     ]);
