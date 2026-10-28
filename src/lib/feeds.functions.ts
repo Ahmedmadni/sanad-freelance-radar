@@ -148,7 +148,7 @@ async function fetchKafiil(): Promise<Item[]> {
         // Skip completed/closed projects — only open ones are opportunities.
         if (/مكتمل|قيد التنفيذ|منفذ/.test(block.match(/<span class="tag[^"]*">([^<]*)<\/span>/)?.[1] ?? "")) continue;
         const link = block.match(/href="(https:\/\/kafiil\.com\/project\/[^"]+)"/)?.[1];
-        const title = block.match(/class="name bold-text[^"]*"[\s\S]*?<\/a>/)?.[0]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        const title = block.match(/class="name bold-text[^"]*"[\s\S]*?<\/a>/)?.[0]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().replace(/^(مكتمل|مفتوح|قيد التنفيذ|منفذ)\s+/, "");
         const when = block.match(/fa-clock[\s\S]{0,80}?(منذ[^<]+)/)?.[1]?.trim() ?? "";
         const price = block.match(/class="price"[^>]*>([\s\S]*?)<\/p>/)?.[1]?.replace(/<[^>]+>/g, " ").trim() ?? "";
         const desc = block.match(/class="info-content"[^>]*>([\s\S]*?)<\/p>/)?.[1]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() ?? "";
