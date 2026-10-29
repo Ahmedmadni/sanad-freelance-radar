@@ -7,7 +7,7 @@ export interface RawItem {
   publishedAt: string | null;
 }
 
-const decode = (s: string) =>
+export const decode = (s: string) =>
   s
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
     .replace(/<[^>]+>/g, " ")
