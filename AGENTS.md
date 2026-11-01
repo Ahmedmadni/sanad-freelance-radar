@@ -10,6 +10,7 @@
 <!-- LOVABLE:END -->
 
 ## Architecture
-- Opportunity data is sample data in `src/lib/opportunities.ts`; settings persist in browser localStorage via `useSettings` — no backend database yet.
+- Opportunity data comes from public source fetchers in `feeds.functions.ts`; settings persist in browser localStorage via `useSettings` — no backend database yet.
+- Saudi job-site parsers live in the browser-safe `saudi-job-sites.ts` module, with bounded detail fetches in `feeds.functions.ts`, so country, expiry and employment rules can be tested without network requests.
 - AI proposals and Telegram sends run in server functions (`src/lib/ai.functions.ts`) so keys never reach the browser.
 - Telegram auto-alerts run client-side in `useTelegramAlerts` (mounted in AppShell) while the app is open; sent IDs live in localStorage. Moving to background alerts requires Lovable Cloud + scheduled job.
