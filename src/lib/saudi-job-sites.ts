@@ -34,7 +34,7 @@ export function parseWadhefa(html: string): SaudiJob[] {
 export function parseWadhefaDetail(html: string) {
   const open = /notice-box-open|التقديم مفتوح/.test(html) && !/notice-box-closed|تم شغلها/.test(html);
   const description = decode(html.match(/<td\b[^>]*class=["']td4textarea["'][^>]*>([\s\S]*?)<\/td>/i)?.[1] ?? "");
-  const typeRow = (html.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) ?? []).find((row) => /نوع الوظيفة/.test(row)) ?? "";
+  const typeRow = html.match(/نوع الوظيفة[^]*?<\/td>\s*<td\b[^>]*>([\s\S]*?)<\/td>/)?.[1] ?? "";
   return { open, description: description.slice(0, 600), employment: inferEmployment(decode(typeRow)) };
 }
 
