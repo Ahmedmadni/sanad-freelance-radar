@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { parseFeed, parseJson, dedupe, isAccounting, isSaudi, toOpportunity, parseLinkedIn, inferEmployment, type RawItem } from "./feeds";
 import type { Employment } from "./opportunities";
+import { parseWadhefa, parseWadhefaDetail, parseMihnatiLinks, parseMihnati } from "./saudi-job-sites";
 
 type In = { sources: { name: string; url: string; type: "RSS" | "Webhook" }[] };
 type Item = RawItem & { sourceName: string; location?: string; employment?: Employment };
@@ -199,6 +200,49 @@ async function fetchLinkedIn(): Promise<Item[]> {
   return out;
 }
 
+const WADHEFA_URL = "https://www.wadhefa.com/jobfind.php?jids%5B%5D=62";
+const MIHNATI_URL = "https://www.mihnati.com/category/accounts-finance-financial-services-jobs";
+
+async function fetchJobPage(url: string) {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "ar" },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+}
+
+async function fetchWadhefa(): Promise<Item[]> {
+  const html = await fetchJobPage(WADHEFA_URL);
+  if (!/job_id\[\]|لا توجد وظائف|لا توجد نتائج/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
+  const jobs = parseWadhefa(html).slice(0, 30);
+  const out: Item[] = [];
+  // Bound concurrency while verifying that each job's application is still open.
+  for (let start = 0; start < jobs.length; start += 5) {
+    await Promise.all(jobs.slice(start, start + 5).map(async (job) => {
+      const detail = parseWadhefaDetail(await fetchJobPage(job.link));
+      if (!detail.open) return;
+      out.push({ ...job, description: detail.description || job.description, employment: detail.employment, sourceName: "وظيفة.كوم" });
+    }));
+  }
+  return out;
+}
+
+async function fetchMihnati(): Promise<Item[]> {
+  const html = await fetchJobPage(MIHNATI_URL);
+  if (!/jlist|لا توجد وظائف|No jobs/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
+  const links = parseMihnatiLinks(html).slice(0, 30);
+  const out: Item[] = [];
+  for (let start = 0; start < links.length; start += 5) {
+    await Promise.all(links.slice(start, start + 5).map(async (link) => {
+      for (const job of parseMihnati(await fetchJobPage(link), link)) {
+        out.push({ ...job, sourceName: "مهنتي" });
+      }
+    }));
+  }
+  return out;
+}
+
 // Freelancer projects are global; keep only ones that mention Saudi Arabia.
 const BUILT_IN_RSS: { name: string; url: string }[] = [
   { name: "Freelancer", url: "https://www.freelancer.com/rss/job_accounting.xml" },
@@ -244,6 +288,8 @@ export const fetchSources = createServerFn({ method: "POST" })
       run("السوق المفتوح", "https://sa.opensooq.com", true, fetchOpenSooq),
       run("مرجان", "https://www.mourjan.com/sa/accounting/vacancies/", true, fetchMourjan),
       run("كفيل", "https://kafiil.com/projects", true, fetchKafiil),
+      run("وظيفة.كوم", WADHEFA_URL, true, fetchWadhefa),
+      run("مهنتي", MIHNATI_URL, true, fetchMihnati),
       ...BUILT_IN_RSS.map((s) => run(`${s.name} (${s.url.split("job_")[1]?.replace(".xml", "")})`, s.url, true, () => fetchUrl(s.url, s.name, true))),
       ...data.sources.map((s) => run(s.name, s.url, false, () => fetchUrl(s.url, s.name, false))),
     ]);
