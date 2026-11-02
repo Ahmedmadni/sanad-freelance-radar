@@ -20,7 +20,7 @@ export function parseWadhefa(html: string): SaudiJob[] {
     if (!/green-dot\.png/.test(row) || /red-dot\.png|warning_red\.png|تم شغلها/.test(row)) continue;
     const cells = [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map((m) => m[1]);
     const anchor = row.match(/<a\b[^>]*href=["']([^"']*\/details\/job\/\d+[^"']*)["'][^>]*>([\s\S]*?)<\/a>/i);
-    const link = anchor ? jobUrl(anchor[1], "https://www.wadhefa.com") : null;
+    const link = anchor?.[1] ? jobUrl(anchor[1], "https://www.wadhefa.com") : null;
     const title = decode(anchor?.[2] ?? "");
     const location = decode(cells[4] ?? "");
     if (!link || !title || !isAccounting(title) || !isSaudi(location)) continue;
@@ -40,7 +40,7 @@ export function parseWadhefaDetail(html: string) {
 
 export function parseMihnatiLinks(html: string): string[] {
   const links = [...html.matchAll(/<h3\b[^>]*>[\s\S]*?<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)]
-    .map((m) => jobUrl(m[1], "https://www.mihnati.com"))
+    .map((m) => jobUrl(m[1] ?? "", "https://www.mihnati.com"))
     .filter((url): url is string => Boolean(url && /-jobs-\d+$/.test(url)));
   return [...new Set(links)];
 }
@@ -64,7 +64,7 @@ export function parseMihnati(html: string, link: string, now = Date.now()): Saud
   };
   for (const script of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
     let postings: Posting[];
-    try { postings = collect(JSON.parse(script[1])); } catch { continue; }
+    try { postings = collect(JSON.parse(script[1] ?? "")); } catch { continue; }
     for (const job of postings) {
       if (![job["@type"]].flat().includes("JobPosting")) continue;
       const expiry = job.validThrough ? Date.parse(job.validThrough) : NaN;
