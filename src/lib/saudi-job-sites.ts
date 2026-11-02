@@ -3,11 +3,13 @@ import type { Employment } from "./opportunities";
 
 export type SaudiJob = RawItem & { location: string; employment: Employment };
 
-function jobUrl(raw: string, origin: string) {
+function jobUrl(raw: string, origin: string, preserveJobKey = false) {
   try {
     const url = new URL(decode(raw), origin);
     if (url.origin !== origin || url.protocol !== "https:") return null;
+    const key = preserveJobKey ? url.searchParams.get("jk") : null;
     url.search = "";
+    if (key) url.searchParams.set("jk", key);
     url.hash = "";
     return url.href;
   } catch { return null; }
@@ -84,7 +86,7 @@ export function parseStructuredSaudiJobs(html: string, link: string, origin: str
       });
       const title = decode(String(job.title ?? ""));
       const description = decode(String(job.description ?? ""));
-      const url = jobUrl(job.url ?? link, origin);
+      const url = jobUrl(job.url ?? link, origin, true);
       if (!saudi || !url || !title || !isAccounting(`${title} ${description}`)) continue;
       const types = [job.employmentType ?? []].flat();
       const employment: Employment = types.includes("PART_TIME") ? "دوام جزئي" : types.includes("FULL_TIME") ? "دوام كامل" : inferEmployment(description);
