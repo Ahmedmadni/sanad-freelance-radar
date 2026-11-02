@@ -52,10 +52,16 @@ type Posting = {
   employmentType?: string | string[];
   jobLocation?: { address?: { addressLocality?: string; addressCountry?: string | { name?: string } } } | { address?: { addressLocality?: string; addressCountry?: string | { name?: string } } }[];
   hiringOrganization?: { name?: string };
+  url?: string;
 };
 
 /** Reject expired postings and validate their structured country, not the page's navigation. */
 export function parseMihnati(html: string, link: string, now = Date.now()): SaudiJob[] {
+  return parseStructuredSaudiJobs(html, link, "https://www.mihnati.com", now);
+}
+
+/** Read employer JobPosting records; a search page's country selector is never location evidence. */
+export function parseStructuredSaudiJobs(html: string, link: string, origin: string, now = Date.now()): SaudiJob[] {
   const out: SaudiJob[] = [];
   const collect = (value: Posting | Posting[]): Posting[] => {
     if (Array.isArray(value)) return value.flatMap(collect);
@@ -78,7 +84,7 @@ export function parseMihnati(html: string, link: string, now = Date.now()): Saud
       });
       const title = decode(String(job.title ?? ""));
       const description = decode(String(job.description ?? ""));
-      const url = jobUrl(link, "https://www.mihnati.com");
+      const url = jobUrl(job.url ?? link, origin);
       if (!saudi || !url || !title || !isAccounting(`${title} ${description}`)) continue;
       const types = [job.employmentType ?? []].flat();
       const employment: Employment = types.includes("PART_TIME") ? "دوام جزئي" : types.includes("FULL_TIME") ? "دوام كامل" : inferEmployment(description);
