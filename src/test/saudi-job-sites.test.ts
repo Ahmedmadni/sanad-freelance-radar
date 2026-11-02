@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWadhefa, parseWadhefaDetail, parseMihnati, parseMihnatiLinks } from "@/lib/saudi-job-sites";
+import { parseWadhefa, parseWadhefaDetail, parseMihnati, parseMihnatiLinks, parseStructuredSaudiJobs, parseGlobalJobLinks } from "@/lib/saudi-job-sites";
 
 const row = (status = "green", city = "الرياض - منطقة الرياض", title = "محاسب") => `<tr><td><input name="job_id[]"></td><td>19/10/2026</td><td><img src="${status}-dot.png"><a href="https://www.wadhefa.com/details/job/90281/search/">${title}</a></td><td>شركة مقاولات</td><td>${city}</td></tr>`;
 const now = Date.parse("2026-11-01T06:10:00Z");
@@ -33,4 +33,51 @@ describe("Saudi employer vacancies", () => {
   it("maps structured part-time separately", () => expect(parseMihnati(posting({ employmentType: ["PART_TIME"] }), link, now)[0]?.employment).toBe("دوام جزئي"));
   it("leaves OTHER unspecified without inferring a salaried position", () => expect(parseMihnati(posting({ employmentType: ["OTHER"] }), link, now)[0]?.employment).toBe("غير محدد"));
   it("rejects non-accounting Mihnati jobs", () => expect(parseMihnati(posting({ title: "مهندس مدني", description: "تصميم مبان" }), link, now)).toHaveLength(0));
+});
+
+describe.each([
+  ["Indeed", "https://sa.indeed.com", "/viewjob?jk=123"],
+  ["Naukrigulf", "https://www.naukrigulf.com", "/accountant-jobs-in-riyadh-123"],
+  ["Bayt", "https://www.bayt.com", "/en/saudi-arabia/jobs/accountant-123/"],
+])("%s structured employer postings", (_name, origin, path) => {
+  const parse = (over: Record<string, unknown> = {}) => parseStructuredSaudiJobs(posting(over), `${origin}${path}`, origin, now);
+  it("accepts accounting employment explicitly located inside Saudi Arabia", () => {
+    expect(parse()[0]).toMatchObject({ title: "محاسب", employment: "دوام كامل" });
+  });
+  it("preserves each job's actual application link", () => {
+    expect(parse()[0]?.link).toBe(`${origin}${path}`);
+  });
+  it("rejects outside-Saudi jobs even with Saudi requirements", () => {
+    expect(parse({ description: "محاسب خبرة بالسعودية", jobLocation: { address: { addressLocality: "Dubai", addressCountry: "AE" } } })).toEqual([]);
+  });
+  it("rejects jobs without an explicit Saudi country", () => {
+    expect(parse({ jobLocation: { address: { addressLocality: "الرياض" } } })).toEqual([]);
+  });
+  it("excludes expired applications", () => {
+    expect(parse({ validThrough: "2026-10-31" })).toEqual([]);
+  });
+  it("does not claim availability without a deadline", () => {
+    expect(parse({ validThrough: undefined })).toEqual([]);
+  });
+  it("keeps part-time separate from full-time", () => {
+    expect(parse({ employmentType: "PART_TIME" })[0]?.employment).toBe("دوام جزئي");
+  });
+  it("rejects non-accounting jobs", () => {
+    expect(parse({ title: "Civil engineer", description: "Building design" })).toEqual([]);
+  });
+  it("rejects a job link outside its platform", () => {
+    expect(parse({ url: "https://unrelated.example/job" })).toEqual([]);
+  });
+});
+
+describe("global platform application links", () => {
+  it("keeps Indeed job keys rather than collapsing jobs to the search page", () => {
+    expect(parseGlobalJobLinks('<a data-jk="d685ee067cea7ca6" href="/rc/clk?jk=d685ee067cea7ca6">Accountant</a>', "indeed")).toEqual(["https://sa.indeed.com/viewjob?jk=d685ee067cea7ca6"]);
+  });
+  it("keeps Naukrigulf details and rejects navigation and other domains", () => {
+    expect(parseGlobalJobLinks('<a href="https://www.naukrigulf.com/accountant-jobs-in-riyadh-jid-011126000024">Accountant</a><a href="/accountant-jobs-in-saudi-arabia">Search</a><a href="https://example.com/job-jid-123">Other</a>', "naukrigulf")).toEqual(["https://www.naukrigulf.com/accountant-jobs-in-riyadh-jid-011126000024"]);
+  });
+  it("only discovers Saudi Bayt job pages", () => {
+    expect(parseGlobalJobLinks('<a href="/en/saudi-arabia/jobs/accountant-5503246/">Accountant</a><a href="/en/uae/jobs/accountant-123/">Dubai</a>', "bayt")).toEqual(["https://www.bayt.com/en/saudi-arabia/jobs/accountant-5503246/"]);
+  });
 });

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { parseFeed, parseJson, dedupe, isAccounting, isSaudi, toOpportunity, parseLinkedIn, inferEmployment, type RawItem } from "./feeds";
 import type { Employment } from "./opportunities";
-import { parseWadhefa, parseWadhefaDetail, parseMihnatiLinks, parseMihnati } from "./saudi-job-sites";
+import { parseWadhefa, parseWadhefaDetail, parseMihnatiLinks, parseMihnati, parseStructuredSaudiJobs, parseGlobalJobLinks, GLOBAL_JOB_SITES, type GlobalJobSite } from "./saudi-job-sites";
 
 type In = { sources: { name: string; url: string; type: "RSS" | "Webhook" }[] };
 type Item = RawItem & { sourceName: string; location?: string; employment?: Employment };
@@ -243,6 +243,38 @@ async function fetchMihnati(): Promise<Item[]> {
   return out;
 }
 
+async function fetchGlobalJobSite(site: GlobalJobSite): Promise<Item[]> {
+  const config = GLOBAL_JOB_SITES[site];
+  const read = async (url: string) => {
+    try {
+      const html = await fetchJobPage(url);
+      if (/captcha|verify you are human|access denied|just a moment/i.test(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "")) {
+        throw new Error("الموقع يمنع الجلب الآلي؛ متاح للتصفح المباشر");
+      }
+      return html;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (/HTTP (403|429)/.test(message)) throw new Error("الموقع يمنع الجلب الآلي؛ متاح للتصفح المباشر");
+      if (/timeout|aborted/i.test(message)) throw new Error("انتهت مهلة الاتصال بالمنصة");
+      throw error;
+    }
+  };
+  const html = await read(config.search);
+  const links = parseGlobalJobLinks(html, site).slice(0, 10);
+  if (!links.length) throw new Error("تعذرت قراءة إعلانات المنصة؛ متاحة للتصفح المباشر");
+  const out: Item[] = [];
+  let verifiedPages = 0;
+  for (let start = 0; start < links.length; start += 5) {
+    await Promise.all(links.slice(start, start + 5).map(async (link) => {
+      const detail = await read(link);
+      if (/"@type"\s*:\s*(?:"JobPosting"|\[[^\]]*"JobPosting")/.test(detail)) verifiedPages += 1;
+      for (const job of parseStructuredSaudiJobs(detail, link, config.origin)) out.push({ ...job, sourceName: config.name });
+    }));
+  }
+  if (!verifiedPages) throw new Error("تعذر التحقق من موقع الوظائف وصلاحية التقديم");
+  return out;
+}
+
 // Freelancer projects are global; keep only ones that mention Saudi Arabia.
 const BUILT_IN_RSS: { name: string; url: string }[] = [
   { name: "Freelancer", url: "https://www.freelancer.com/rss/job_accounting.xml" },
@@ -290,6 +322,7 @@ export const fetchSources = createServerFn({ method: "POST" })
       run("كفيل", "https://kafiil.com/projects", true, fetchKafiil),
       run("وظيفة.كوم", WADHEFA_URL, true, fetchWadhefa),
       run("مهنتي", MIHNATI_URL, true, fetchMihnati),
+      ...(["indeed", "naukrigulf", "bayt"] as const).map((site) => run(GLOBAL_JOB_SITES[site].name, GLOBAL_JOB_SITES[site].search, true, () => fetchGlobalJobSite(site))),
       ...BUILT_IN_RSS.map((s) => run(`${s.name} (${s.url.split("job_")[1]?.replace(".xml", "")})`, s.url, true, () => fetchUrl(s.url, s.name, true))),
       ...data.sources.map((s) => run(s.name, s.url, false, () => fetchUrl(s.url, s.name, false))),
     ]);

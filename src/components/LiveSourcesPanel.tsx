@@ -21,7 +21,7 @@ export function SourcesStatus({ q }: { q: ReturnType<typeof useLiveSources> }) {
         {d?.statuses.map((s) => (
           <span key={s.url} className={s.ok ? "flex items-center gap-1 text-muted-foreground" : "flex items-center gap-1 text-destructive"}>
             {s.ok ? <CheckCircle2 className="size-3 text-primary" /> : <AlertCircle className="size-3" />}
-            {s.name}: {s.ok ? `${s.count}` : s.error}
+            <a href={s.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2" title={`فتح ${s.name}`}>{s.name}</a>: {s.ok ? `${s.count}` : s.error}
           </span>
         ))}
       </div>

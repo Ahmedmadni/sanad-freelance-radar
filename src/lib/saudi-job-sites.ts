@@ -3,11 +3,13 @@ import type { Employment } from "./opportunities";
 
 export type SaudiJob = RawItem & { location: string; employment: Employment };
 
-function jobUrl(raw: string, origin: string) {
+function jobUrl(raw: string, origin: string, preserveJobKey = false) {
   try {
     const url = new URL(decode(raw), origin);
     if (url.origin !== origin || url.protocol !== "https:") return null;
+    const key = preserveJobKey ? url.searchParams.get("jk") : null;
     url.search = "";
+    if (key) url.searchParams.set("jk", key);
     url.hash = "";
     return url.href;
   } catch { return null; }
@@ -45,6 +47,26 @@ export function parseMihnatiLinks(html: string): string[] {
   return [...new Set(links)];
 }
 
+export type GlobalJobSite = "indeed" | "naukrigulf" | "bayt";
+export const GLOBAL_JOB_SITES = {
+  indeed: { name: "إنديد", origin: "https://sa.indeed.com", search: "https://sa.indeed.com/jobs?q=accountant&l=Saudi%20Arabia" },
+  naukrigulf: { name: "نوكري غلف", origin: "https://www.naukrigulf.com", search: "https://www.naukrigulf.com/accountant-jobs-in-saudi-arabia" },
+  bayt: { name: "بيت", origin: "https://www.bayt.com", search: "https://www.bayt.com/en/saudi-arabia/jobs/accountant-jobs/" },
+} as const;
+
+/** Only job-detail anchors observed in the platforms' public search markup. */
+export function parseGlobalJobLinks(html: string, site: GlobalJobSite): string[] {
+  const origin = GLOBAL_JOB_SITES[site].origin;
+  if (site === "indeed") {
+    return [...new Set([...html.matchAll(/<a\b[^>]*\bdata-jk=["']([a-f0-9]+)["'][^>]*>/gi)]
+      .map((m) => `${origin}/viewjob?jk=${m[1]}`))];
+  }
+  const pattern = site === "bayt" ? /\/en\/saudi-arabia\/jobs\/[^/]+-\d+\/$/ : /-jid-\d+$/;
+  return [...new Set([...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)]
+    .map((m) => jobUrl(m[1] ?? "", origin))
+    .filter((url): url is string => Boolean(url && pattern.test(new URL(url).pathname))))];
+}
+
 type Posting = {
   "@type"?: string | string[];
   "@graph"?: Posting[];
@@ -52,10 +74,16 @@ type Posting = {
   employmentType?: string | string[];
   jobLocation?: { address?: { addressLocality?: string; addressCountry?: string | { name?: string } } } | { address?: { addressLocality?: string; addressCountry?: string | { name?: string } } }[];
   hiringOrganization?: { name?: string };
+  url?: string;
 };
 
 /** Reject expired postings and validate their structured country, not the page's navigation. */
 export function parseMihnati(html: string, link: string, now = Date.now()): SaudiJob[] {
+  return parseStructuredSaudiJobs(html, link, "https://www.mihnati.com", now);
+}
+
+/** Read employer JobPosting records; a search page's country selector is never location evidence. */
+export function parseStructuredSaudiJobs(html: string, link: string, origin: string, now = Date.now()): SaudiJob[] {
   const out: SaudiJob[] = [];
   const collect = (value: Posting | Posting[]): Posting[] => {
     if (Array.isArray(value)) return value.flatMap(collect);
@@ -78,7 +106,7 @@ export function parseMihnati(html: string, link: string, now = Date.now()): Saud
       });
       const title = decode(String(job.title ?? ""));
       const description = decode(String(job.description ?? ""));
-      const url = jobUrl(link, "https://www.mihnati.com");
+      const url = jobUrl(job.url ?? link, origin, true);
       if (!saudi || !url || !title || !isAccounting(`${title} ${description}`)) continue;
       const types = [job.employmentType ?? []].flat();
       const employment: Employment = types.includes("PART_TIME") ? "دوام جزئي" : types.includes("FULL_TIME") ? "دوام كامل" : inferEmployment(description);
