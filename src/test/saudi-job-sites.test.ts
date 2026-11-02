@@ -17,7 +17,7 @@ describe("Saudi employer vacancies", () => {
   it("does not show Wadhefa jobs outside Saudi Arabia", () => expect(parseWadhefa(row("green", "القاهرة"))).toHaveLength(0));
   it("does not show non-accounting Wadhefa jobs", () => expect(parseWadhefa(row("green", "الرياض", "مهندس مدني"))).toHaveLength(0));
   it("reads full-time from the job-type field, not incidental description", () => {
-    const detail = parseWadhefaDetail(`<div class="notice-box-open">التقديم مفتوح</div><td class="td4textarea">خبرة في مشروع محاسبي</td><tr><td>نوع الوظيفة:</td><td class="ulli">دوام كامل</td></tr>`);
+    const detail = parseWadhefaDetail(`<div class="notice-box-open">التقديم مفتوح</div><td class="td4textarea">خبرة في مشروع محاسبي</td><TR><TD>نوع الوظيفة:</TD><TD class="ulli">دوام كامل</TD></TR>`);
     expect(detail.employment).toBe("دوام كامل");
     expect(detail.open).toBe(true);
   });
