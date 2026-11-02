@@ -47,6 +47,26 @@ export function parseMihnatiLinks(html: string): string[] {
   return [...new Set(links)];
 }
 
+export type GlobalJobSite = "indeed" | "naukrigulf" | "bayt";
+export const GLOBAL_JOB_SITES = {
+  indeed: { name: "إنديد", origin: "https://sa.indeed.com", search: "https://sa.indeed.com/jobs?q=accountant&l=Saudi%20Arabia" },
+  naukrigulf: { name: "نوكري غلف", origin: "https://www.naukrigulf.com", search: "https://www.naukrigulf.com/accountant-jobs-in-saudi-arabia" },
+  bayt: { name: "بيت", origin: "https://www.bayt.com", search: "https://www.bayt.com/en/saudi-arabia/jobs/accountant-jobs/" },
+} as const;
+
+/** Only job-detail anchors observed in the platforms' public search markup. */
+export function parseGlobalJobLinks(html: string, site: GlobalJobSite): string[] {
+  const origin = GLOBAL_JOB_SITES[site].origin;
+  if (site === "indeed") {
+    return [...new Set([...html.matchAll(/<a\b[^>]*\bdata-jk=["']([a-f0-9]+)["'][^>]*>/gi)]
+      .map((m) => `${origin}/viewjob?jk=${m[1]}`))];
+  }
+  const pattern = site === "bayt" ? /\/en\/saudi-arabia\/jobs\/[^/]+-\d+\/$/ : /-jid-\d+$/;
+  return [...new Set([...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)]
+    .map((m) => jobUrl(m[1] ?? "", origin))
+    .filter((url): url is string => Boolean(url && pattern.test(new URL(url).pathname))))];
+}
+
 type Posting = {
   "@type"?: string | string[];
   "@graph"?: Posting[];
