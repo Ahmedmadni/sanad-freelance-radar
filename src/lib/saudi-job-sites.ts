@@ -3,6 +3,31 @@ import type { Employment } from "./opportunities";
 
 export type SaudiJob = RawItem & { location: string; employment: Employment };
 
+/** Read only active Saudi employer vacancies, never service listings or job seekers. */
+export function parseOpenSooq(html: string, now = Date.now()): SaudiJob[] {
+  const payload = html.match(/<script\b[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/)?.[1];
+  if (!payload) throw new Error("تعذرت قراءة قائمة الوظائف");
+  const items = JSON.parse(payload)?.props?.pageProps?.serpApiResponse?.listings?.items;
+  if (!Array.isArray(items)) throw new Error("تعذرت قراءة قائمة الوظائف");
+  const out: SaudiJob[] = [];
+  for (const x of items) {
+    if (x.cat1_code !== "JobsVertical" || x.cat2_code !== "JobPoster" || x.is_active !== true) continue;
+    const expiry = String(x.expired_at ?? "").match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    if (!expiry) continue;
+    const day = Number(expiry[1]), month = Number(expiry[2]), year = Number(expiry[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCDate() !== day || date.getUTCMonth() !== month - 1 || date.getUTCFullYear() !== year || date.getTime() + 86400000 <= now) continue;
+    const title = decode(String(x.title ?? ""));
+    const description = decode(String(x.masked_description ?? ""));
+    const location = decode(String(x.city_label ?? ""));
+    const path = String(x.post_url ?? "");
+    if (!/^\/job-posters\/\d+$/.test(path) || !isSaudi(location) || !isAccountingRequest(`${title} ${description}`, true)) continue;
+    const posted = Date.parse(String(x.inserted_date ?? ""));
+    out.push({ title, description: description.slice(0, 600), location, link: `https://sa.opensooq.com/ar${path}`, publishedAt: Number.isFinite(posted) ? new Date(posted).toISOString() : null, employment: inferEmployment(`${title} ${description}`) });
+  }
+  return out;
+}
+
 /** Saudi accounting vacancy links are location evidence; service and other-job rows are not. */
 export function parseMourjan(html: string, now = Date.now()): SaudiJob[] {
   const cities: Record<string, string> = { riyadh: "الرياض", "al-riyadh": "الرياض", jeddah: "جدة", dammam: "الدمام", "al-madina": "المدينة المنورة", makkah: "مكة", khobar: "الخبر", taif: "الطائف", tabuk: "تبوك", abha: "أبها", qassim: "القصيم", "al-qassim": "القصيم", jubail: "الجبيل", hail: "حائل", jazan: "جازان", najran: "نجران", yanbu: "ينبع" };
