@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
-import { parseFeed, parseJson, dedupe, isAccounting, isSaudi, toOpportunity, parseLinkedIn, inferEmployment, type RawItem } from "./feeds";
+import { parseFeed, parseJson, dedupe, isAccounting, isAccountingRequest, isSaudi, toOpportunity, parseLinkedIn, inferEmployment, type RawItem } from "./feeds";
 import type { Employment } from "./opportunities";
-import { parseWadhefa, parseWadhefaDetail, parseMihnatiLinks, parseMihnati, parseStructuredSaudiJobs, parseGlobalJobLinks, GLOBAL_JOB_SITES, type GlobalJobSite } from "./saudi-job-sites";
+import { parseWadhefa, parseWadhefaDetail, parseMihnatiLinks, parseMihnati, parseMourjan, parseOpenSooq, parseStructuredSaudiJobs, parseGlobalJobLinks, GLOBAL_JOB_SITES, type GlobalJobSite } from "./saudi-job-sites";
 
 type In = { sources: { name: string; url: string; type: "RSS" | "Webhook" }[] };
 type Item = RawItem & { sourceName: string; location?: string; employment?: Employment };
@@ -43,7 +43,7 @@ async function fetchHaraj(): Promise<Item[]> {
         const title = String(p.title ?? "");
         const body = String(p.bodyTEXT ?? "");
         const head = `${title} ${body.slice(0, 120)}`;
-        if (!WANTS.test(head) || !ACC.test(head) || SELF_AD.test(title) || SELF_AD.test(body.slice(0, 80))) continue;
+        if (!WANTS.test(head) || !ACC.test(head) || SELF_AD.test(title) || SELF_AD.test(body.slice(0, 80)) || !isAccountingRequest(`${title} ${body}`)) continue;
         out.push({
           title,
           description: body.slice(0, 600),
@@ -67,29 +67,11 @@ async function fetchOpenSooq(): Promise<Item[]> {
     OS_TERMS.map(async (term) => {
       const res = await fetch(`https://sa.opensooq.com/ar/find?term=${encodeURIComponent(term)}`, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ar" },
+        signal: AbortSignal.timeout(15000),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const html = await res.text();
-      const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-      if (!m?.[1]) return;
-      const items: any[] = JSON.parse(m[1])?.props?.pageProps?.serpApiResponse?.listings?.items ?? [];
-      for (const x of items) {
-        const title = String(x.title ?? "");
-        const body = String(x.masked_description ?? "");
-        const head = `${title} ${body}`;
-        const isVacancy = x.cat2_code === "JobPoster";
-        const isWanted = WANTS.test(head) && !["Services", "ComputerAndLaptops", "BusinessIndustrial"].includes(x.cat1_code);
-        if (!(isVacancy || isWanted) || !ACC.test(title) || SELF_AD.test(title)) continue;
-        out.push({
-          title,
-          description: body,
-          link: `https://sa.opensooq.com/ar/search/${x.id}`,
-          publishedAt: x.inserted_date ? new Date(x.inserted_date).toISOString() : null,
-          sourceName: "السوق المفتوح",
-          location: x.city_label ? `السوق المفتوح · ${x.city_label}` : "السوق المفتوح",
-          employment: inferEmployment(head),
-        });
-      }
+      out.push(...parseOpenSooq(html).map((job) => ({ ...job, sourceName: "السوق المفتوح" })));
     }),
   );
   return out;
@@ -101,33 +83,15 @@ function arRelative(t: string): string | null {
   const mins = /دقيق/.test(t) ? n : /ساع/.test(t) ? n * 60 : /يوم|أيام/.test(t) ? n * 1440 : /أسبوع|اسبوع|أسابيع/.test(t) ? n * 10080 : /شهر|أشهر/.test(t) ? n * 43200 : null;
   return mins === null ? null : new Date(Date.now() - mins * 60000).toISOString();
 }
-const MJ_CITIES: Record<string, string> = { riyadh: "الرياض", jeddah: "جدة", dammam: "الدمام", "al-madina": "المدينة المنورة", makkah: "مكة", khobar: "الخبر", taif: "الطائف", tabuk: "تبوك", abha: "أبها", qassim: "القصيم", jubail: "الجبيل", hail: "حائل", jazan: "جازان", najran: "نجران", yanbu: "ينبع" };
 async function fetchMourjan(): Promise<Item[]> {
   const res = await fetch("https://www.mourjan.com/sa/accounting/vacancies/", {
     headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ar" },
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const html = await res.text();
-  const out: Item[] = [];
-  for (const block of html.split('<div class=widget id=').slice(1)) {
-    const href = block.match(/href=(\/sa\/[^ >]+)/)?.[1];
-    const content = block.match(/class="content[^"]*">([\s\S]*?)<\/div>/)?.[1]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    if (!href || !content) continue;
-    const when = block.match(/<div>(منذ[^<]+)<\/div>/)?.[1] ?? "";
-    const slug = href.split("/")[2] ?? "";
-    const city = MJ_CITIES[slug] ?? (slug && slug !== "accounting" ? slug : "السعودية");
-    if (SELF_AD.test(content.slice(0, 80))) continue;
-    out.push({
-      title: content.length > 90 ? `${content.slice(0, 90)}…` : content,
-      description: content.slice(0, 600),
-      link: `https://www.mourjan.com${href}`,
-      publishedAt: arRelative(when),
-      sourceName: "مرجان",
-      location: `مرجان · ${city}`,
-      employment: inferEmployment(content),
-    });
-  }
-  return out;
+  if (!/class=widget|لا توجد إعلانات/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
+  return parseMourjan(html).map((job) => ({ ...job, sourceName: "مرجان" }));
 }
 
 // ---- Kafiil (كفيل) freelance projects: buyers posting projects, filtered to accounting + Saudi ----
@@ -147,7 +111,7 @@ async function fetchKafiil(): Promise<Item[]> {
       const html = await res.text();
       for (const block of html.split("project-box active").slice(1)) {
         // Skip completed/closed projects — only open ones are opportunities.
-        if (/مكتمل|قيد التنفيذ|منفذ/.test(block.match(/<span class="tag[^"]*">([^<]*)<\/span>/)?.[1] ?? "")) continue;
+        if ((block.match(/<span class="tag[^"]*">([^<]*)<\/span>/)?.[1] ?? "").trim() !== "مفتوح") continue;
         const link = block.match(/href="(https:\/\/kafiil\.com\/project\/[^"]+)"/)?.[1];
         const title = block.match(/class="name bold-text[^"]*"[\s\S]*?<\/a>/)?.[0]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().replace(/^(مكتمل|مفتوح|قيد التنفيذ|منفذ)\s+/, "");
         const when = block.match(/fa-clock[\s\S]{0,80}?(منذ[^<]+)/)?.[1]?.trim() ?? "";
@@ -155,7 +119,7 @@ async function fetchKafiil(): Promise<Item[]> {
         const desc = block.match(/class="info-content"[^>]*>([\s\S]*?)<\/p>/)?.[1]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() ?? "";
         if (!link || !title) continue;
         const head = `${title} ${desc}`;
-        if (!ACC.test(head) || SELF_AD.test(head.slice(0, 120)) || !isSaudi(head)) continue;
+        if (!ACC.test(head) || SELF_AD.test(head.slice(0, 120)) || !isSaudi(head) || !isAccountingRequest(head, true)) continue;
         out.push({
           title,
           description: `${desc}${price ? ` — الميزانية: ${price}` : ""}`.slice(0, 600),
@@ -183,7 +147,7 @@ async function fetchLinkedIn(): Promise<Item[]> {
       const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36" } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       for (const j of parseLinkedIn(await res.text())) {
-        if (!isSaudi(`${j.location} Saudi`) || !isAccounting(j.title)) continue;
+        if (!isSaudi(j.location) || !isAccountingRequest(j.title, true)) continue;
         out.push({
           title: j.title,
           description: `${j.company} تبحث عن ${j.title} — ${j.location}`,
@@ -275,6 +239,16 @@ async function fetchGlobalJobSite(site: GlobalJobSite): Promise<Item[]> {
   return out;
 }
 
+// These buyer-request pages can return empty challenge responses rather than listings.
+// Keep their public links visible without treating an unreadable response as zero jobs.
+async function checkBuyerPage(url: string): Promise<Item[]> {
+  const html = await fetchJobPage(url);
+  if (!html.trim() || /captcha|access denied|just a moment|verify you are human/i.test(html)) {
+    throw new Error("المنصة لا تتيح قراءة الطلبات آلياً؛ متاحة للتصفح المباشر");
+  }
+  throw new Error("تعذرت قراءة طلبات المنصة والتحقق من موقع العمل؛ متاحة للتصفح المباشر");
+}
+
 // Freelancer projects are global; keep only ones that mention Saudi Arabia.
 const BUILT_IN_RSS: { name: string; url: string }[] = [
   { name: "Freelancer", url: "https://www.freelancer.com/rss/job_accounting.xml" },
@@ -322,6 +296,9 @@ export const fetchSources = createServerFn({ method: "POST" })
       run("كفيل", "https://kafiil.com/projects", true, fetchKafiil),
       run("وظيفة.كوم", WADHEFA_URL, true, fetchWadhefa),
       run("مهنتي", MIHNATI_URL, true, fetchMihnati),
+      run("مستقل", "https://mostaql.com/projects?keyword=%D9%85%D8%AD%D8%A7%D8%B3%D8%A8%D8%A9", true, () => checkBuyerPage("https://mostaql.com/projects?keyword=%D9%85%D8%AD%D8%A7%D8%B3%D8%A8%D8%A9")),
+      run("خمسات", "https://khamsat.com/community/requests", true, () => checkBuyerPage("https://khamsat.com/community/requests")),
+      run("بعيد", "https://baaeed.com/remote-jobs", true, () => checkBuyerPage("https://baaeed.com/remote-jobs")),
       ...(["indeed", "naukrigulf", "bayt"] as const).map((site) => run(GLOBAL_JOB_SITES[site].name, GLOBAL_JOB_SITES[site].search, true, () => fetchGlobalJobSite(site))),
       ...BUILT_IN_RSS.map((s) => run(`${s.name} (${s.url.split("job_")[1]?.replace(".xml", "")})`, s.url, true, () => fetchUrl(s.url, s.name, true))),
       ...data.sources.map((s) => run(s.name, s.url, false, () => fetchUrl(s.url, s.name, false))),
