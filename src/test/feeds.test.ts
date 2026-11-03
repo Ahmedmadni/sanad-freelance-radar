@@ -63,6 +63,8 @@ import { inferEmployment } from "@/lib/feeds";
 describe("employment type", () => {
   it("detects part-time", () => expect(inferEmployment("مطلوب محاسب دوام جزئي بالرياض")).toBe("دوام جزئي"));
   it("detects full-time", () => expect(inferEmployment("شاغر وظيفي محاسب دوام كامل")).toBe("دوام كامل"));
+  it("does not classify a remote interview as part-time work", () => expect(inferEmployment("مطلوب رئيس حسابات في مصنع بالقصيم المقابلات الشخصية ستكون عن بعد")).toBe("غير محدد"));
+  it("keeps explicitly remote accounting contracts as part-time", () => expect(inferEmployment("مطلوب محاسب عن بعد بالرياض")).toBe("دوام جزئي"));
 });
 
 describe("accounting employer requests only", () => {

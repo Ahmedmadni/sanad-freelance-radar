@@ -158,7 +158,7 @@ export function isSaudi(text: string) {
 
 /** Part-time covers part-time, freelance, remote-contract and per-task work; full-time covers permanent positions. */
 export function inferEmployment(text: string): Employment {
-  if (/دوام جزئي|جزئي|بارت تايم|part[- ]?time|متعاون|عن بعد|فريلانس|freelance|بالساعة|بالقطعة|مشروع|project|contract|عقد مؤقت/i.test(text)) return "دوام جزئي";
+  if (/دوام جزئي|جزئي|بارت تايم|part[- ]?time|متعاون|(?:العمل|للعمل|محاسب|الوظيفة|وظيفة|عمل) عن بعد|remote (?:work|contract|accountant)|فريلانس|freelance|بالساعة|بالقطعة|مشروع|project|contract|عقد مؤقت/i.test(text)) return "دوام جزئي";
   if (/دوام كامل|full[- ]?time|شاغر وظيفي|وظيفة شاغرة|راتب شهري|permanent/i.test(text)) return "دوام كامل";
   return "غير محدد";
 }
