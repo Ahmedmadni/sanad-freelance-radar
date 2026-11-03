@@ -85,6 +85,14 @@ export function isAccounting(text: string) {
   return inferSkills(text).length > 0 || ACCOUNTING_HINTS.some((w) => t.includes(w));
 }
 
+/** Hiring/buyer evidence is separate from incidental software and skill mentions. */
+export function isAccountingRequest(text: string, employerCategory = false) {
+  const accounting = /محاسب|محاسبة|محاسبه|رئيس حسابات|مدير حسابات|مراجع حسابات|مدقق حسابات|مسك دفاتر|قوائم مالي[ةه]|إقرار[ات]* ضريب|اقرار[ات]* ضريب|إقرار[ات]* زكو|اقرار[ات]* زكو|\baccount(?:ant|ing)\b|\bbookkeep(?:er|ing)\b|\bauditor\b/i;
+  const wants = /مطلوب|احتاج|أحتاج|ابغى|أبغى|أبحث عن|ابحث عن|نبحث عن|نحتاج|توظيف|وظيفة|وظائف|شاغر|فرصة وظيفية|\b(?:hiring|seeking|needed|looking for|vacancy)\b/i;
+  const service = /(?:^|[.،\n])\s*(?:أنا|انا) محاسب|(?:ابحث|أبحث) عن (?:عمل|وظيفة)|(?:اقدم|أقدم|نقدم|نوفّر|نوفر) خدم|خدمات محاسبية|(?:عندي|لدينا|نوفر) فواتير|فواتير إلكتروني[ةه].*(?:الأسعار|الاسعار)|(?:حلك عندي|تصفير الضريب|رفع الغرامات|ورقع الغرامات)|\b(?:my services|i offer|looking for a job)\b/i;
+  return accounting.test(text) && !service.test(text) && (employerCategory || wants.test(text));
+}
+
 const normTitle = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 const normLink = (s: string) => s.trim().replace(/[?#].*$/, "").replace(/\/+$/, "").toLowerCase();
 

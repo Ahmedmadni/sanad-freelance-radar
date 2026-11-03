@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dedupe, parseFeed, isAccounting } from "@/lib/feeds";
+import { dedupe, parseFeed, isAccounting, isAccountingRequest } from "@/lib/feeds";
 
 describe("feeds", () => {
   it("removes duplicates with the same link (ignoring query string)", () => {
@@ -63,4 +63,22 @@ import { inferEmployment } from "@/lib/feeds";
 describe("employment type", () => {
   it("detects part-time", () => expect(inferEmployment("مطلوب محاسب دوام جزئي بالرياض")).toBe("دوام جزئي"));
   it("detects full-time", () => expect(inferEmployment("شاغر وظيفي محاسب دوام كامل")).toBe("دوام كامل"));
+});
+
+describe("accounting employer requests only", () => {
+  it("excludes the Haraj invoice and tax services offer", () => {
+    expect(isAccountingRequest("محاسب رفع اقرارات ضربيية يوجد لدينا فواتير إلكترونيه معتمده من هيئة الزكاه والضريبه لجميع الانشطه باقل الأسعار حلك عندي")).toBe(false);
+  });
+  it("excludes production supervisors even with incidental accounting software", () => {
+    expect(isAccountingRequest("مطلوب مشرف إنتاج للمصنع يجيد SAP", true)).toBe(false);
+  });
+  it("keeps an employer looking for a licensed accountant in Riyadh", () => {
+    expect(isAccountingRequest("مطلوب محاسب قانوني لديه خبرة لإدارة مكتب مراجعة مرخص جديد بالرياض")).toBe(true);
+  });
+  it("keeps Saudi buyer requests for accounting deliverables", () => {
+    expect(isAccountingRequest("أحتاج إعداد قوائم مالية لشركة بالرياض")).toBe(true);
+  });
+  it("excludes an accountant looking for a job", () => {
+    expect(isAccountingRequest("أنا محاسب أبحث عن وظيفة في جدة", true)).toBe(false);
+  });
 });

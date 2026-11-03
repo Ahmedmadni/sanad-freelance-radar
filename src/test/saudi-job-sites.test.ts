@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWadhefa, parseWadhefaDetail, parseMihnati, parseMihnatiLinks, parseStructuredSaudiJobs, parseGlobalJobLinks } from "@/lib/saudi-job-sites";
+import { parseWadhefa, parseWadhefaDetail, parseMihnati, parseMihnatiLinks, parseStructuredSaudiJobs, parseGlobalJobLinks, parseMourjan } from "@/lib/saudi-job-sites";
 
 const row = (status = "green", city = "الرياض - منطقة الرياض", title = "محاسب") => `<tr><td><input name="job_id[]"></td><td>19/10/2026</td><td><img src="${status}-dot.png"><a href="https://www.wadhefa.com/details/job/90281/search/">${title}</a></td><td>شركة مقاولات</td><td>${city}</td></tr>`;
 const now = Date.parse("2026-11-01T06:10:00Z");
@@ -8,6 +8,18 @@ const posting = (over: Record<string, unknown> = {}) => `<script type="applicati
   "@type": "JobPosting", title: "محاسب", description: "إعداد القيود والقوائم المالية", datePosted: "2026-10-19", validThrough: "2026-12-01", employmentType: ["FULL_TIME"],
   jobLocation: { address: { addressLocality: "الرياض", addressCountry: { name: "SA" } } }, ...over,
 })}</script>`;
+
+const mourjan = (text: string, path = "/sa/al-riyadh/accounting/vacancies/123/") => `<div class=widget id=123><a href=${path}><div class="content ar">${text}</div></a><div>منذ 2 ساعة</div></div>`;
+describe("Mourjan Saudi accounting vacancies", () => {
+  it("keeps real employer accounting jobs with Saudi city and date", () => {
+    expect(parseMourjan(mourjan("مطلوب محاسب دوام كامل بالرياض"), now)[0]).toMatchObject({ location: "الرياض", employment: "دوام كامل", publishedAt: "2026-11-01T04:10:00.000Z", link: "https://www.mourjan.com/sa/al-riyadh/accounting/vacancies/123/" });
+  });
+  it("rejects jobs outside Saudi Arabia", () => expect(parseMourjan(mourjan("مطلوب محاسب", "/ae/dubai/accounting/vacancies/123/"), now)).toEqual([]));
+  it("rejects non-accounting jobs inside an accounting category", () => expect(parseMourjan(mourjan("مطلوب مشرف إنتاج للمصنع يجيد SAP"), now)).toEqual([]));
+  it("rejects accounting services instead of employer requests", () => expect(parseMourjan(mourjan("نقدم خدمات محاسبية في الرياض"), now)).toEqual([]));
+  it("keeps part-time separately", () => expect(parseMourjan(mourjan("مطلوب محاسب بدوام جزئي في نجران"), now)[0]?.employment).toBe("دوام جزئي"));
+  it("rejects filled ads", () => expect(parseMourjan(mourjan("مطلوب محاسب - تم شغل الوظيفة"), now)).toEqual([]));
+});
 
 describe("Saudi employer vacancies", () => {
   it("reads open Wadhefa accounting jobs with their actual link and day-first date", () => {

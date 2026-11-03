@@ -1,7 +1,27 @@
-import { decode, inferEmployment, isAccounting, isSaudi, type RawItem } from "./feeds";
+import { decode, inferEmployment, isAccounting, isAccountingRequest, isSaudi, type RawItem } from "./feeds";
 import type { Employment } from "./opportunities";
 
 export type SaudiJob = RawItem & { location: string; employment: Employment };
+
+/** Saudi accounting vacancy links are location evidence; service and other-job rows are not. */
+export function parseMourjan(html: string, now = Date.now()): SaudiJob[] {
+  const cities: Record<string, string> = { riyadh: "الرياض", "al-riyadh": "الرياض", jeddah: "جدة", dammam: "الدمام", "al-madina": "المدينة المنورة", makkah: "مكة", khobar: "الخبر", taif: "الطائف", tabuk: "تبوك", abha: "أبها", qassim: "القصيم", "al-qassim": "القصيم", jubail: "الجبيل", hail: "حائل", jazan: "جازان", najran: "نجران", yanbu: "ينبع" };
+  const jobs: SaudiJob[] = [];
+  for (const block of html.split('<div class=widget id=').slice(1)) {
+    const raw = block.match(/href=["']?(\/sa\/[^\s>"']+)/)?.[1];
+    const link = raw ? jobUrl(raw, "https://www.mourjan.com") : null;
+    const description = decode(block.match(/class="content[^\"]*">([\s\S]*?)<\/div>/)?.[1] ?? "");
+    if (!link || !/^\/sa\/(?:[^/]+\/)?accounting\/vacancies\/\d+\/$/.test(new URL(link).pathname)) continue;
+    if (!isAccountingRequest(description, true) || /تم شغل|انتهى الإعلان|انتهى الاعلان|التقديم مغلق/.test(description)) continue;
+    const when = decode(block.match(/<div>(منذ[^<]+)<\/div>/)?.[1] ?? "");
+    const n = Number(when.match(/\d+/)?.[0] ?? 1);
+    const minutes = /دقيق/.test(when) ? n : /ساع/.test(when) ? n * 60 : /يوم|أيام/.test(when) ? n * 1440 : /أسبوع|اسبوع|أسابيع/.test(when) ? n * 10080 : /شهر|أشهر/.test(when) ? n * 43200 : null;
+    const city = cities[new URL(link).pathname.split("/")[2] ?? ""] ?? "السعودية";
+    jobs.push({ title: description.length > 90 ? `${description.slice(0, 90)}…` : description, description: description.slice(0, 600), link,
+      publishedAt: minutes === null ? null : new Date(now - minutes * 60000).toISOString(), location: city, employment: inferEmployment(description) });
+  }
+  return jobs;
+}
 
 function jobUrl(raw: string, origin: string, preserveJobKey = false) {
   try {
