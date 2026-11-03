@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWadhefa, parseWadhefaDetail, parseMihnati, parseMihnatiLinks, parseStructuredSaudiJobs, parseGlobalJobLinks, parseMourjan } from "@/lib/saudi-job-sites";
+import { parseWadhefa, parseWadhefaDetail, parseMihnati, parseMihnatiLinks, parseStructuredSaudiJobs, parseGlobalJobLinks, parseMourjan, parseOpenSooq } from "@/lib/saudi-job-sites";
 
 const row = (status = "green", city = "الرياض - منطقة الرياض", title = "محاسب") => `<tr><td><input name="job_id[]"></td><td>19/10/2026</td><td><img src="${status}-dot.png"><a href="https://www.wadhefa.com/details/job/90281/search/">${title}</a></td><td>شركة مقاولات</td><td>${city}</td></tr>`;
 const now = Date.parse("2026-11-01T06:10:00Z");
@@ -19,6 +19,24 @@ describe("Mourjan Saudi accounting vacancies", () => {
   it("rejects accounting services instead of employer requests", () => expect(parseMourjan(mourjan("نقدم خدمات محاسبية في الرياض"), now)).toEqual([]));
   it("keeps part-time separately", () => expect(parseMourjan(mourjan("مطلوب محاسب بدوام جزئي في نجران"), now)[0]?.employment).toBe("دوام جزئي"));
   it("rejects filled ads", () => expect(parseMourjan(mourjan("مطلوب محاسب - تم شغل الوظيفة"), now)).toEqual([]));
+});
+
+const openSooq = (over: Record<string, unknown> = {}) => `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify({ props: { pageProps: { serpApiResponse: { listings: { items: [{
+  title: "محاسب شركة نقليات", masked_description: "مطلوب محاسب للعمل في جدة", cat1_code: "JobsVertical", cat2_code: "JobPoster", is_active: true, expired_at: "31-12-2026", city_label: "جدة", post_url: "/job-posters/289435520", inserted_date: "2026-11-01", ...over,
+}] } } } } })}</script>`;
+describe("OpenSooq active Saudi employer jobs", () => {
+  it("preserves the actual employer application link", () => expect(parseOpenSooq(openSooq(), now)[0]?.link).toBe("https://sa.opensooq.com/ar/job-posters/289435520"));
+  it("rejects service listings even with wanted wording", () => expect(parseOpenSooq(openSooq({ cat1_code: "Services", cat2_code: "Accounting_and_Finance" }), now)).toEqual([]));
+  it("rejects job-seeker listings", () => expect(parseOpenSooq(openSooq({ cat2_code: "JobSeeker" }), now)).toEqual([]));
+  it("rejects inactive jobs", () => expect(parseOpenSooq(openSooq({ is_active: false }), now)).toEqual([]));
+  it("rejects expired day-first dates", () => expect(parseOpenSooq(openSooq({ expired_at: "31-10-2026" }), now)).toEqual([]));
+  it("rejects unavailable deadlines", () => expect(parseOpenSooq(openSooq({ expired_at: undefined }), now)).toEqual([]));
+  it("rejects impossible expiry dates", () => expect(parseOpenSooq(openSooq({ expired_at: "31-11-2026" }), now)).toEqual([]));
+  it("rejects non-Saudi cities", () => expect(parseOpenSooq(openSooq({ city_label: "دبي" }), now)).toEqual([]));
+  it("rejects links outside the observed employer path", () => expect(parseOpenSooq(openSooq({ post_url: "https://example.com/job" }), now)).toEqual([]));
+  it("rejects non-accounting vacancies", () => expect(parseOpenSooq(openSooq({ title: "مشرف إنتاج", masked_description: "مطلوب مشرف إنتاج يجيد SAP" }), now)).toEqual([]));
+  it("keeps explicit part-time employment separate", () => expect(parseOpenSooq(openSooq({ masked_description: "مطلوب محاسب بدوام جزئي في جدة" }), now)[0]?.employment).toBe("دوام جزئي"));
+  it("does not report unreadable markup as zero vacancies", () => expect(() => parseOpenSooq("<html>Challenge</html>", now)).toThrow());
 });
 
 describe("Saudi employer vacancies", () => {
