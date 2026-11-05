@@ -57,6 +57,10 @@ describe("saudi only", () => {
     expect(isSaudi("مطلوب محاسب في القاهرة")).toBe(false);
     expect(isSaudi("Senior Accountant, remote USA")).toBe(false);
   });
+  it("does not treat a Saudi-looking URL suffix as a Saudi job location", () => {
+    expect(isSaudi("Accountant in Cairo https://example.sa/jobs/1")).toBe(false);
+    expect(isSaudi("Accountant in Cairo https://example.com/example.sa/jobs/1")).toBe(false);
+  });
 });
 
 import { inferEmployment } from "@/lib/feeds";
@@ -65,6 +69,13 @@ describe("employment type", () => {
   it("detects full-time", () => expect(inferEmployment("شاغر وظيفي محاسب دوام كامل")).toBe("دوام كامل"));
   it("does not classify a remote interview as part-time work", () => expect(inferEmployment("مطلوب رئيس حسابات في مصنع بالقصيم المقابلات الشخصية ستكون عن بعد")).toBe("غير محدد"));
   it("keeps explicitly remote accounting contracts as part-time", () => expect(inferEmployment("مطلوب محاسب عن بعد بالرياض")).toBe("دوام جزئي"));
+  it("preserves explicit full-time work when a project is mentioned", () => {
+    expect(inferEmployment("مطلوب محاسب دوام كامل لمشروع في الرياض")).toBe("دوام كامل");
+    expect(inferEmployment("Full-time accountant for a construction project in Riyadh")).toBe("دوام كامل");
+  });
+  it("preserves explicit full-time remote employment", () => {
+    expect(inferEmployment("مطلوب محاسب دوام كامل للعمل عن بعد بالرياض")).toBe("دوام كامل");
+  });
 });
 
 describe("accounting employer requests only", () => {

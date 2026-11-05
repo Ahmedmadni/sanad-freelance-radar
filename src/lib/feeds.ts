@@ -149,17 +149,18 @@ export function pickAlerts(items: Opportunity[], keywords: string[], minBudget: 
   });
 }
 
-const SAUDI = /السعودي|السعودية|المملكة|الرياض|جدة|جده|مكة|مكه|المدينة المنورة|الدمام|الخبر|الظهران|الأحساء|الاحساء|القصيم|بريدة|الطائف|تبوك|أبها|ابها|خميس مشيط|جازان|نجران|حائل|الجبيل|ينبع|زاتكا|هيئة الزكاة|\bKSA\b|Saudi|Riyadh|Jeddah|Dammam|Khobar|\.sa\//i;
+const SAUDI = /السعودي|السعودية|المملكة|الرياض|جدة|جده|مكة|مكه|المدينة المنورة|الدمام|الخبر|الظهران|الأحساء|الاحساء|القصيم|بريدة|الطائف|تبوك|أبها|ابها|خميس مشيط|جازان|نجران|حائل|الجبيل|ينبع|زاتكا|هيئة الزكاة|\bKSA\b|Saudi|Riyadh|Jeddah|Dammam|Khobar/i;
 
-/** True only when the text clearly points to Saudi Arabia (city, country, ZATCA, or a .sa link). */
+/** Require Saudi location evidence in the text; a URL alone does not locate a job. */
 export function isSaudi(text: string) {
   return SAUDI.test(text);
 }
 
 /** Part-time covers part-time, freelance, remote-contract and per-task work; full-time covers permanent positions. */
 export function inferEmployment(text: string): Employment {
-  if (/دوام جزئي|جزئي|بارت تايم|part[- ]?time|متعاون|(?:العمل|للعمل|محاسب|الوظيفة|وظيفة|عمل) عن بعد|remote (?:work|contract|accountant)|فريلانس|freelance|بالساعة|بالقطعة|مشروع|project|contract|عقد مؤقت/i.test(text)) return "دوام جزئي";
+  if (/دوام جزئي|جزئي|بارت تايم|part[- ]?time/i.test(text)) return "دوام جزئي";
   if (/دوام كامل|full[- ]?time|شاغر وظيفي|وظيفة شاغرة|راتب شهري|permanent/i.test(text)) return "دوام كامل";
+  if (/متعاون|(?:العمل|للعمل|محاسب|الوظيفة|وظيفة|عمل) عن بعد|remote (?:work|contract|accountant)|فريلانس|freelance|بالساعة|بالقطعة|مشروع|project|contract|عقد مؤقت/i.test(text)) return "دوام جزئي";
   return "غير محدد";
 }
 
