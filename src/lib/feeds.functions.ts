@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { parseFeed, parseJson, dedupe, isAccounting, isAccountingRequest, isSaudi, toOpportunity, parseLinkedIn, inferEmployment, type RawItem } from "./feeds";
 import type { Employment } from "./opportunities";
-import { parseWadhefa, parseWadhefaDetail, parseMihnatiLinks, parseMihnati, parseMourjan, parseOpenSooq, parseStructuredSaudiJobs, parseGlobalJobLinks, GLOBAL_JOB_SITES, type GlobalJobSite } from "./saudi-job-sites";
+import { parseWadhefa, parseWadhefaDetail, parseMihnatiLinks, parseMihnati, parseMourjan, parseOpenSooq, parseOpenSooqLinks, parseOpenSooqDetail, parseStructuredSaudiJobs, parseGlobalJobLinks, GLOBAL_JOB_SITES, type GlobalJobSite } from "./saudi-job-sites";
 
 type In = { sources: { name: string; url: string; type: "RSS" | "Webhook" }[] };
 type Item = RawItem & { sourceName: string; location?: string; employment?: Employment };
@@ -63,6 +63,7 @@ async function fetchHaraj(): Promise<Item[]> {
 const OS_TERMS = ["مطلوب محاسب", "محاسب", "محاسبة", "مسك دفاتر"];
 async function fetchOpenSooq(): Promise<Item[]> {
   const out: Item[] = [];
+  const links = new Set<string>();
   await Promise.all(
     OS_TERMS.map(async (term) => {
       const res = await fetch(`https://sa.opensooq.com/ar/find?term=${encodeURIComponent(term)}`, {
@@ -71,9 +72,20 @@ async function fetchOpenSooq(): Promise<Item[]> {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const html = await res.text();
-      out.push(...parseOpenSooq(html).map((job) => ({ ...job, sourceName: "السوق المفتوح" })));
+      if (/<script\b[^>]*id=["']__NEXT_DATA__["']/.test(html)) {
+        out.push(...parseOpenSooq(html).map((job) => ({ ...job, sourceName: "السوق المفتوح" })));
+      } else {
+        if (!/data-testid=["']serp-(?:job-card|job-specs)["']/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
+        for (const link of parseOpenSooqLinks(html)) links.add(link);
+      }
     }),
   );
+  const candidates = [...links].slice(0, 12);
+  for (let start = 0; start < candidates.length; start += 3) {
+    await Promise.all(candidates.slice(start, start + 3).map(async (link) => {
+      out.push(...parseOpenSooqDetail(await fetchJobPage(link), link).map((job) => ({ ...job, sourceName: "السوق المفتوح" })));
+    }));
+  }
   return out;
 }
 

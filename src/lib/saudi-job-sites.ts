@@ -3,6 +3,57 @@ import type { Employment } from "./opportunities";
 
 export type SaudiJob = RawItem & { location: string; employment: Employment };
 
+/** Discover only employer accounting detail pages in OpenSooq's public rendered HTML. */
+export function parseOpenSooqLinks(html: string): string[] {
+  const links: string[] = [];
+  for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const attrs = match[1] ?? "";
+    const attr = (name: string) => attrs.match(new RegExp(`\\b${name}=["']([^"']+)["']`, "i"))?.[1] ?? "";
+    if (attr("data-cat1-code") !== "JobsVertical" || attr("data-cat2-code") !== "JobPoster") continue;
+    const path = attr("href");
+    const title = decode((match[2] ?? "").match(/<h2\b[^>]*>([\s\S]*?)<\/h2>/i)?.[1] ?? "");
+    if (/^\/ar\/job-posters\/\d+$/.test(path) && isAccountingRequest(title, true)) links.push(`https://sa.opensooq.com${path}`);
+  }
+  return [...new Set(links)];
+}
+
+/** Decode public React data as JSON only; never execute scripts or extract contact-reveal keys. */
+function openSooqListingData(html: string, id: number) {
+  const find = (value: unknown): Record<string, any> | undefined => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const child of value) { const found = find(child); if (found) return found; }
+      return;
+    }
+    const object = value as Record<string, any>;
+    if (object.listingData?.commonInfo?.postId === id) return object.listingData;
+    for (const child of Object.values(object)) { const found = find(child); if (found) return found; }
+  };
+  let stream = "";
+  for (const script of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
+    const encoded = (script[1] ?? "").match(/self\.__next_f\.push\(\[1,("[\s\S]*")\]\)/)?.[1];
+    if (!encoded) continue;
+    try { stream += JSON.parse(encoded); } catch { continue; }
+  }
+  for (const line of stream.split("\n")) {
+    const colon = line.indexOf(":");
+    if (colon < 0) continue;
+    try { const found = find(JSON.parse(line.slice(colon + 1))); if (found) return found; } catch { continue; }
+  }
+}
+
+/** Require this exact ad to be live AND accepting applications; suggested ads never establish status. */
+export function parseOpenSooqDetail(html: string, link: string, now = Date.now()): SaudiJob[] {
+  const canonical = jobUrl(link, "https://sa.opensooq.com");
+  const id = canonical?.match(/\/ar\/job-posters\/(\d+)$/)?.[1];
+  if (!canonical || !id) return [];
+  const data = openSooqListingData(html, Number(id));
+  if (!data) throw new Error("تعذر التحقق من حالة إعلان السوق المفتوح");
+  if (data.type !== "job" || data.loggingData?.categoryReportingName !== "JobsVertical" || data.loggingData?.subCategoryReportingName !== "JobPoster" || data.loggingData?.isListingLive !== true || data.job?.applyButton?.isEnabled !== true) return [];
+  const jobs = parseStructuredSaudiJobs(html, canonical, "https://sa.opensooq.com", now, true);
+  return jobs.filter((job) => isAccountingRequest(`${job.title} ${job.description}`, true)).map((job) => ({ ...job, title: decode(String(data.commonInfo?.topTitle ?? job.title)) }));
+}
+
 /** Read only active Saudi employer vacancies, never service listings or job seekers. */
 export function parseOpenSooq(html: string, now = Date.now()): SaudiJob[] {
   const payload = html.match(/<script\b[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/)?.[1];
@@ -128,7 +179,7 @@ export function parseMihnati(html: string, link: string, now = Date.now()): Saud
 }
 
 /** Read employer JobPosting records; a search page's country selector is never location evidence. */
-export function parseStructuredSaudiJobs(html: string, link: string, origin: string, now = Date.now()): SaudiJob[] {
+export function parseStructuredSaudiJobs(html: string, link: string, origin: string, now = Date.now(), verifiedLive = false): SaudiJob[] {
   const out: SaudiJob[] = [];
   const collect = (value: Posting | Posting[]): Posting[] => {
     if (Array.isArray(value)) return value.flatMap(collect);
@@ -141,7 +192,7 @@ export function parseStructuredSaudiJobs(html: string, link: string, origin: str
     for (const job of postings) {
       if (![job["@type"]].flat().includes("JobPosting")) continue;
       const expiry = job.validThrough ? Date.parse(job.validThrough) : NaN;
-      if (!Number.isFinite(expiry) || expiry <= now) continue;
+      if (job.validThrough ? !Number.isFinite(expiry) || expiry <= now : !verifiedLive) continue;
       const locations = Array.isArray(job.jobLocation) ? job.jobLocation : [job.jobLocation];
       // A multi-country posting is accepted only for its explicitly Saudi location.
       const saudi = locations.find((place) => {

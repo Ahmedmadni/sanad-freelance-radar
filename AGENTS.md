@@ -12,5 +12,6 @@
 ## Architecture
 - Opportunity data comes from public source fetchers in `feeds.functions.ts`; settings persist in browser localStorage via `useSettings` — no backend database yet.
 - Saudi job-site parsers live in the browser-safe `saudi-job-sites.ts` module, with bounded detail fetches in `feeds.functions.ts`; employer intent is validated separately from skill mentions, and platform-specific country, active-status and expiry checks are tested without network requests. Unreadable buyer platforms expose browsing links and a failure status, never invented jobs or successful empty results.
+- OpenSooq supports legacy JSON and public rendered employer links; its detail fallback requires matching ad identity, live status, enabled application, and structured Saudi location before accepting jobs without a published deadline, because current pages omit expiry dates.
 - AI proposals and Telegram sends run in server functions (`src/lib/ai.functions.ts`) so keys never reach the browser.
 - Telegram auto-alerts run client-side in `useTelegramAlerts` (mounted in AppShell) while the app is open; sent IDs live in localStorage. Moving to background alerts requires Lovable Cloud + scheduled job.

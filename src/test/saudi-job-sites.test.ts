@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWadhefa, parseWadhefaDetail, parseMihnati, parseMihnatiLinks, parseStructuredSaudiJobs, parseGlobalJobLinks, parseMourjan, parseOpenSooq } from "@/lib/saudi-job-sites";
+import { parseWadhefa, parseWadhefaDetail, parseMihnati, parseMihnatiLinks, parseStructuredSaudiJobs, parseGlobalJobLinks, parseMourjan, parseOpenSooq, parseOpenSooqLinks, parseOpenSooqDetail } from "@/lib/saudi-job-sites";
 
 const row = (status = "green", city = "الرياض - منطقة الرياض", title = "محاسب") => `<tr><td><input name="job_id[]"></td><td>19/10/2026</td><td><img src="${status}-dot.png"><a href="https://www.wadhefa.com/details/job/90281/search/">${title}</a></td><td>شركة مقاولات</td><td>${city}</td></tr>`;
 const now = Date.parse("2026-11-01T06:10:00Z");
@@ -37,6 +37,38 @@ describe("OpenSooq active Saudi employer jobs", () => {
   it("rejects non-accounting vacancies", () => expect(parseOpenSooq(openSooq({ title: "مشرف إنتاج", masked_description: "مطلوب مشرف إنتاج يجيد SAP" }), now)).toEqual([]));
   it("keeps explicit part-time employment separate", () => expect(parseOpenSooq(openSooq({ masked_description: "مطلوب محاسب بدوام جزئي في جدة" }), now)[0]?.employment).toBe("دوام جزئي"));
   it("does not report unreadable markup as zero vacancies", () => expect(() => parseOpenSooq("<html>Challenge</html>", now)).toThrow());
+});
+
+const osLink = "https://sa.opensooq.com/ar/job-posters/289435520";
+const osAnchor = (category = "JobPoster", title = "محاسب شركة نقليات") => `<a data-cat1-code="JobsVertical" data-cat2-code="${category}" href="/ar/job-posters/289435520"><h2>${title}</h2></a>`;
+const osDetail = (over: Record<string, unknown> = {}, jobOver: Record<string, unknown> = {}) => {
+  const listingData = { type: "job", commonInfo: { postId: 289435520, topTitle: "محاسب شركة نقليات" }, loggingData: { categoryReportingName: "JobsVertical", subCategoryReportingName: "JobPoster", isListingLive: true }, job: { applyButton: { isEnabled: true } }, ...over };
+  const frame = `f:${JSON.stringify(["$", "section", null, { listingData }])}\n`;
+  return `${posting({ validThrough: undefined, ...jobOver })}<script>self.__next_f.push([1,${JSON.stringify(frame)}])</script>`;
+};
+describe("OpenSooq public rendered detail fallback", () => {
+  it("discovers only employer accounting links", () => {
+    expect(parseOpenSooqLinks(osAnchor() + osAnchor("JobSeeker") + osAnchor("JobPoster", "مشرف إنتاج يجيد SAP"))).toEqual([osLink]);
+  });
+  it("accepts explicitly live Saudi accounting ads with enabled applications without an expiry field", () => {
+    expect(parseOpenSooqDetail(osDetail(), osLink, now)[0]).toMatchObject({ link: osLink, title: "محاسب شركة نقليات", employment: "دوام كامل" });
+  });
+  it("rejects inactive ads even when applications appear enabled", () => {
+    expect(parseOpenSooqDetail(osDetail({ loggingData: { categoryReportingName: "JobsVertical", subCategoryReportingName: "JobPoster", isListingLive: false } }), osLink, now)).toEqual([]);
+  });
+  it("rejects disabled applications", () => expect(parseOpenSooqDetail(osDetail({ job: { applyButton: { isEnabled: false } } }), osLink, now)).toEqual([]));
+  it("rejects status belonging to a different suggested ad", () => {
+    expect(() => parseOpenSooqDetail(osDetail({ commonInfo: { postId: 999 } }), osLink, now)).toThrow();
+  });
+  it("rejects job seeker pages", () => {
+    expect(parseOpenSooqDetail(osDetail({ loggingData: { categoryReportingName: "JobsVertical", subCategoryReportingName: "JobSeeker", isListingLive: true } }), osLink, now)).toEqual([]);
+  });
+  it("rejects non-Saudi jobs despite live status", () => {
+    expect(parseOpenSooqDetail(osDetail({}, { jobLocation: { address: { addressLocality: "Dubai", addressCountry: "AE" } } }), osLink, now)).toEqual([]);
+  });
+  it("rejects an expired deadline despite live status", () => expect(parseOpenSooqDetail(osDetail({}, { validThrough: "2026-10-01" }), osLink, now)).toEqual([]));
+  it("preserves part-time independently", () => expect(parseOpenSooqDetail(osDetail({}, { employmentType: "PART_TIME" }), osLink, now)[0]?.employment).toBe("دوام جزئي"));
+  it("does not report unreadable detail pages as successful empty results", () => expect(() => parseOpenSooqDetail("<html></html>", osLink, now)).toThrow());
 });
 
 describe("Saudi employer vacancies", () => {
