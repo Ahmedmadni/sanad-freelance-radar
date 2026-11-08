@@ -18,16 +18,23 @@ export function parseOpenSooqLinks(html: string): string[] {
 }
 
 /** Decode public React data as JSON only; never execute scripts or extract contact-reveal keys. */
-function openSooqListingData(html: string, id: number) {
-  const find = (value: unknown): Record<string, any> | undefined => {
-    if (!value || typeof value !== "object") return;
+type OpenSooqListingData = {
+  type?: string;
+  commonInfo?: { postId?: number; topTitle?: string };
+  loggingData?: { categoryReportingName?: string; subCategoryReportingName?: string; isListingLive?: boolean };
+  job?: { applyButton?: { isEnabled?: boolean } };
+};
+function openSooqListingData(html: string, id: number): OpenSooqListingData | undefined {
+  const find = (value: unknown): OpenSooqListingData | undefined => {
+    if (!value || typeof value !== "object") return undefined;
     if (Array.isArray(value)) {
       for (const child of value) { const found = find(child); if (found) return found; }
-      return;
+      return undefined;
     }
     const object = value as Record<string, any>;
-    if (object.listingData?.commonInfo?.postId === id) return object.listingData;
+    if (object['listingData']?.commonInfo?.postId === id) return object['listingData'];
     for (const child of Object.values(object)) { const found = find(child); if (found) return found; }
+    return undefined;
   };
   let stream = "";
   for (const script of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
@@ -40,6 +47,7 @@ function openSooqListingData(html: string, id: number) {
     if (colon < 0) continue;
     try { const found = find(JSON.parse(line.slice(colon + 1))); if (found) return found; } catch { continue; }
   }
+  return undefined;
 }
 
 /** Require this exact ad to be live AND accepting applications; suggested ads never establish status. */
