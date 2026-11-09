@@ -94,7 +94,7 @@ export function parseMourjan(html: string, now = Date.now()): SaudiJob[] {
   for (const block of html.split('<div class=widget id=').slice(1)) {
     const raw = block.match(/href=["']?(\/sa\/[^\s>"']+)/)?.[1];
     const link = raw ? jobUrl(raw, "https://www.mourjan.com") : null;
-    const description = decode(block.match(/class="content[^\"]*">([\s\S]*?)<\/div>/)?.[1] ?? "");
+    const description = decode(block.match(/class="content[^"]*">([\s\S]*?)<\/div>/)?.[1] ?? "");
     if (!link || !/^\/sa\/(?:[^/]+\/)?accounting\/vacancies\/\d+\/$/.test(new URL(link).pathname)) continue;
     if (!isAccountingRequest(description, true) || /تم شغل|انتهى الإعلان|انتهى الاعلان|التقديم مغلق/.test(description)) continue;
     const when = decode(block.match(/<div>(منذ[^<]+)<\/div>/)?.[1] ?? "");
