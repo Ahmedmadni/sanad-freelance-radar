@@ -1,14 +1,17 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireOwner, limitOwnerAction } from "./owner-auth";
 
 export const generateProposal = createServerFn({ method: "POST" })
+  .middleware([requireOwner])
   .inputValidator(
     (input: { title: string; description: string; budget: string; client: string; name: string; bio: string }) => {
       if (!input?.title || input.title.length > 500) throw new Error("بيانات غير صالحة");
-      if ((input.description ?? "").length > 4000) throw new Error("الوصف طويل جداً");
+      if ((input.description ?? "").length > 4000 || (input.bio ?? "").length > 4000) throw new Error("الوصف طويل جداً");
       return input;
     },
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    limitOwnerAction(context.userId, "ai-proposal", 10, 60 * 60_000);
     const { streamText } = await import("ai");
     const { createOpenAI } = await import("@ai-sdk/openai");
     const apiKey = process.env["LOVABLE_API_KEY"];
@@ -55,19 +58,32 @@ export const generateProposal = createServerFn({ method: "POST" })
     }
   });
 
+/** Server secrets: set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in Lovable Cloud. */
 export const sendTelegramTest = createServerFn({ method: "POST" })
-  .inputValidator((input: { token: string; chatId: string; text: string }) => {
-    if (!/^\d+:[\w-]{20,}$/.test(input?.token ?? "")) throw new Error("صيغة التوكن غير صحيحة");
-    if (!input.chatId || input.chatId.length > 64) throw new Error("معرف الشات مطلوب");
-    return { ...input, text: (input.text ?? "").slice(0, 3500) };
+  .middleware([requireOwner])
+  .inputValidator((input: { text: string }) => {
+    if (typeof input?.text !== "string" || !input.text || input.text.length > 3500) {
+      throw new Error("رسالة تليجرام غير صالحة");
+    }
+    return { text: input.text };
   })
-  .handler(async ({ data }) => {
-    const res = await fetch(`https://api.telegram.org/bot${data.token}/sendMessage`, {
+  .handler(async ({ data, context }) => {
+    limitOwnerAction(context.userId, "telegram", 60, 60 * 60_000);
+    const botToken = process.env["TELEGRAM_BOT_TOKEN"]?.trim();
+    const chatId = process.env["TELEGRAM_CHAT_ID"]?.trim();
+    if (!botToken || !chatId) {
+      throw new Error("أضف TELEGRAM_BOT_TOKEN و TELEGRAM_CHAT_ID في أسرار Lovable Cloud");
+    }
+    if (!/^\\d+:[\\w-]{20,}$/.test(botToken) || !/^-?\\d+$/.test(chatId)) {
+      throw new Error("إعدادات بوت تليجرام غير صالحة");
+    }
+    const res = await fetch("https://api.telegram.org/bot" + botToken + "/sendMessage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: data.chatId, text: data.text, parse_mode: "HTML" }),
+      body: JSON.stringify({ chat_id: chatId, text: data.text, parse_mode: "HTML" }),
+      signal: AbortSignal.timeout(10000),
     });
-    const body = (await res.json()) as { ok: boolean; description?: string };
-    if (!body.ok) throw new Error(`تليجرام: ${body.description ?? res.status}`);
+    const body = (await res.json()) as { ok?: boolean; description?: string };
+    if (!res.ok || !body.ok) throw new Error("تليجرام: " + (body.description ?? String(res.status)));
     return { ok: true };
   });
