@@ -94,45 +94,80 @@ export function isAccountingRequest(text: string, employerCategory = false) {
 }
 
 const normTitle = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
-const normLink = (s: string) => s.trim().replace(/[?#].*$/, "").replace(/\/+$/, "").toLowerCase();
 
-/** Removes duplicates by link and by normalized title; keeps the first (newest after sorting). */
-export function dedupe<T extends { title: string; link: string }>(items: T[]): T[] {
-  const seenL = new Set<string>();
-  const seenT = new Set<string>();
-  const out: T[] = [];
-  for (const it of items) {
-    const l = it.link ? normLink(it.link) : "";
-    const t = normTitle(it.title);
-    if ((l && seenL.has(l)) || (t && seenT.has(t))) continue;
-    if (l) seenL.add(l);
-    if (t) seenT.add(t);
-    out.push(it);
+const normLink = (raw: string) => {
+  try {
+    const url = new URL(raw.trim());
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^utm_/i.test(key) || /^(fbclid|gclid|mc_cid|mc_eid)$/i.test(key)) url.searchParams.delete(key);
+    }
+    url.searchParams.sort();
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    return url.toString();
+  } catch {
+    return raw.trim().replace(/#.*$/, "");
   }
-  return out;
+};
+
+/** Identical generic job titles can belong to different employers. */
+export function dedupe<T extends { title: string; link: string; sourceName?: string; location?: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((it) => {
+    const key = it.link
+      ? "url:" + normLink(it.link)
+      : "no-url:" + (it.sourceName ?? "") + ":" + (it.location ?? "") + ":" + normTitle(it.title);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
-export function toOpportunity(it: RawItem & { sourceName: string; location?: string; employment?: Employment }, idx: number): Opportunity {
-  const text = `${it.title} ${it.description}`;
-  const nums = [...text.matchAll(/(?:\$|SAR|ريال)\s?(\d{2,6})|(\d{2,6})\s?(?:\$|دولار|USD|ريال|SAR)/g)].map((m) => Number(m[1] ?? m[2]));
-  const min = nums.length ? Math.min(...nums) : 0;
-  const max = nums.length ? Math.max(...nums) : 0;
-  const mins = it.publishedAt ? Math.max(0, Math.round((Date.now() - Date.parse(it.publishedAt)) / 60000)) : 0;
+const normalizeNumerals = (s: string) =>
+  s.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+
+export function parseBudget(text: string): { min: number; max: number; currency: "SAR" | "USD" | null } {
+  const re = /(?:\b(SAR|USD)\b|(\$|ريال(?:ات)?|دولار(?:ات)?))\s*(\d[\d,٬]*(?:[.٫]\d+)?)|(\d[\d,٬]*(?:[.٫]\d+)?)\s*(?:\b(SAR|USD)\b|(\$|ريال(?:ات)?|دولار(?:ات)?))/gi;
+  const values: { amount: number; currency: "SAR" | "USD" }[] = [];
+  for (const match of normalizeNumerals(text).matchAll(re)) {
+    const unit = (match[1] ?? match[2] ?? match[5] ?? match[6] ?? "").toLowerCase();
+    const amount = Number((match[3] ?? match[4] ?? "").replace(/[,٬]/g, "").replace("٫", "."));
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+    values.push({ amount, currency: /^(sar|ريال)/.test(unit) ? "SAR" : "USD" });
+  }
+  if (!values.length) return { min: 0, max: 0, currency: null };
+  const currency = values[0].currency;
+  if (values.some((v) => v.currency !== currency)) return { min: 0, max: 0, currency: null };
+  return { min: Math.min(...values.map((v) => v.amount)), max: Math.max(...values.map((v) => v.amount)), currency };
+}
+
+function stableId(s: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < s.length; i++) hash = Math.imul(hash ^ s.charCodeAt(i), 16777619);
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+export function toOpportunity(it: RawItem & { sourceName: string; location?: string; employment?: Employment }, _idx: number): Opportunity {
+  const text = it.title + " " + it.description;
+  const budget = parseBudget(text);
+  const mins = it.publishedAt ? Math.max(0, Math.round((Date.now() - Date.parse(it.publishedAt)) / 60000)) : null;
   return {
-    id: `src-${idx}-${normTitle(it.title).slice(0, 20)}`,
+    id: "src-" + stableId(it.link ? normLink(it.link) : it.sourceName + ":" + it.title + ":" + (it.location ?? "")),
     title: it.title,
     description: it.description,
-    platform: it.sourceName as Opportunity["platform"],
-    budgetMin: min,
-    budgetMax: max,
+    platform: it.sourceName,
+    budgetMin: budget.min,
+    budgetMax: budget.max,
+    budgetCurrency: budget.currency,
     skills: inferSkills(text),
     urgency: /عاجل|urgent|فوري/i.test(text) ? "عاجل" : "عادي",
     postedMinutesAgo: mins,
-    offers: 0,
+    offers: null,
     client: it.location ?? it.sourceName,
     url: it.link,
     sourceName: it.sourceName,
     employment: it.employment ?? inferEmployment(text),
+    workMode: inferWorkMode(text),
     publishedAt: it.publishedAt,
   };
 }
@@ -156,11 +191,22 @@ export function isSaudi(text: string) {
   return SAUDI.test(text);
 }
 
-/** Part-time covers part-time, freelance, remote-contract and per-task work; full-time covers permanent positions. */
+/** Employment type and location are distinct. */
 export function inferEmployment(text: string): Employment {
-  if (/دوام جزئي|جزئي|بارت تايم|part[- ]?time/i.test(text)) return "دوام جزئي";
-  if (/دوام كامل|full[- ]?time|شاغر وظيفي|وظيفة شاغرة|راتب شهري|permanent/i.test(text)) return "دوام كامل";
-  if (/متعاون|(?:العمل|للعمل|محاسب|الوظيفة|وظيفة|عمل) عن بعد|remote (?:work|contract|accountant)|فريلانس|freelance|بالساعة|بالقطعة|مشروع|project|contract|عقد مؤقت/i.test(text)) return "دوام جزئي";
+  if (/دوام كامل|full[- ]?time|راتب شهري|permanent/i.test(text)) return "دوام كامل";
+  if (/دوام جزئي|بارت تايم|part[- ]?time/i.test(text)) return "دوام جزئي";
+  if (/فريلانس|freelanc|بالساعة|بالقطعة|عمل مستقل|مشروع مستقل/i.test(text)) return "عمل حر";
+  if (/عقد مؤقت|temporary contract|fixed[- ]term contract/i.test(text)) return "عقد مؤقت";
+  return "غير محدد";
+}
+
+export function inferWorkMode(text: string): "عن بعد" | "حضوري" | "هجين" | "غير محدد" {
+  const withoutInterviews = text
+    .replace(/(?:المقابلات?|المقابلة|interviews?)[^.!،\n]{0,100}(?:عن بعد|remote|online)/gi, "")
+    .replace(/(?:عن بعد|remote|online)[^.!،\n]{0,40}(?:المقابلات?|المقابلة|interviews?)/gi, "");
+  if (/هجين|hybrid/i.test(withoutInterviews)) return "هجين";
+  if (/(?:للعمل|العمل|وظيفة|محاسب|work|position|job)\s+عن بعد|remote[- ]?(?:work|job|position|accountant)|work from home|فريلانس عن بعد/i.test(withoutInterviews)) return "عن بعد";
+  if (/حضوري|on[- ]?site|من مقر الشركة|من المكتب/i.test(withoutInterviews)) return "حضوري";
   return "غير محدد";
 }
 
