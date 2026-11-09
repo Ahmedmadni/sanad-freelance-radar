@@ -114,7 +114,7 @@ function SettingsPage() {
           matched.map((o) => `• <b>${escapeHtml(o.title)}</b>\n  ${escapeHtml(o.platform)} | ${o.budgetMax > 0 && o.budgetCurrency ? `${o.budgetMin}-${o.budgetMax} ${o.budgetCurrency}` : "غير محددة"} | ${escapeHtml(o.urgency)}\n  ${escapeHtml(o.url)}`).join("\n\n")
         : "✅ تم ربط رادار فرص المحاسبة بنجاح!";
       await send({ data: { text } });
-      toast.success("تم إرسال الرسالة إلى تليجرام");
+      toast.success("تم إرسال الرسالة إلى حسابك الخاص، وليس القناة");
     } catch (e: any) {
       toast.error(e?.message ?? "فشل الإرسال");
     } finally {
@@ -126,23 +126,14 @@ function SettingsPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <h1 className="font-display text-3xl font-bold">التنبيهات والإعدادات</h1>
 
-      <Card title="اختبارات البوت الخاصة" desc="هذا القسم لاختبار اتصال البوت مع حساب المالك فقط؛ لا يرسل هنا إلى متابعي القناة. تُحفظ البيانات في أسرار Cloud.">
-        
-        <div className="space-y-2"><Label>الحد الأدنى للميزانية ($)</Label><Input dir="ltr" type="number" value={s.minBudget} onChange={(e) => update({ minBudget: Number(e.target.value) || 0 })} /></div>
-        <div className="flex flex-wrap gap-2">
-          <Button disabled={sending} onClick={() => test(false)}>{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}رسالة تجريبية</Button>
-          <Button variant="outline" disabled={sending} onClick={() => test(true)}>إرسال ملخص سريع (5 فرص)</Button>
-        </div>
-        <p className="text-xs text-muted-foreground">هذا القسم لاختبار الاتصال وإرسال ملخص سريع يدوياً. التنبيهات الفورية لكل فرصة متوقفة؛ التقارير التلقائية المجمعة تُضبط في القسم التالي. توكن البوت محفوظ في أسرار الخادم.</p>
-      </Card>
-
-      <Card title="قناة سند العامة" desc="كل من ينضم إلى القناة سيشاهد تقارير الفرص، دون الحاجة إلى تسجيل حساب في الموقع أو استقبال رسالة خاصة من البوت.">
+      <Card title="قناة سند العامة — الوجهة الأساسية" desc="كل من ينضم إلى القناة سيشاهد تقارير الفرص، دون الحاجة إلى تسجيل حساب في الموقع أو استقبال رسالة خاصة من البوت.">
         <p className="text-sm text-muted-foreground">
           أنشئ قناة تليجرام، وأضف @Ahmedelmadni_bot مشرفاً بصلاحية نشر الرسائل.
           بعدها احفظ مُعرّف القناة في أسرار Lovable Cloud باسم <code>TELEGRAM_CHANNEL_ID</code>؛
           يمكنك استخدام <code>@channel_username</code> لقناة عامة أو رقم قناة يبدأ بـ <code>-100</code>.
         </p>
-        <Button variant="outline" disabled={channelBusy} onClick={() => void testChannel()}>
+        <div className="rounded-lg border bg-muted/40 p-3 text-sm">الوجهة العامة: <a href="https://t.me/Radar_4_Jobs" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary underline underline-offset-2" dir="ltr">@Radar_4_Jobs</a> — هذا هو مكان نشر التقارير المجمعة، وليس محادثتك الخاصة.</div>
+        <Button disabled={channelBusy} onClick={() => void testChannel()}>
           {channelBusy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           نشر رسالة اختبار في القناة
         </Button>
@@ -187,6 +178,22 @@ function SettingsPage() {
           </div>
         )}
       </Card>
+
+      <details className="rounded-xl border bg-card p-4">
+        <summary className="cursor-pointer font-semibold">اختبارات خاصة لحساب المالك فقط (اختياري)</summary>
+        <div className="pt-4">
+      <Card title="رسائل الاختبار الخاصة (ليست للقناة)" desc="هذا القسم لاختبار اتصال البوت مع حساب المالك فقط؛ لا يرسل هنا إلى متابعي القناة. تُحفظ البيانات في أسرار Cloud.">
+        
+        <div className="space-y-2"><Label>الحد الأدنى للميزانية ($)</Label><Input dir="ltr" type="number" value={s.minBudget} onChange={(e) => update({ minBudget: Number(e.target.value) || 0 })} /></div>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={sending} onClick={() => test(false)}>{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}رسالة تجريبية</Button>
+          <Button variant="outline" disabled={sending} onClick={() => test(true)}>إرسال ملخص خاص إلى حسابي (5 فرص)</Button>
+        </div>
+        <p className="text-xs text-muted-foreground">هذا القسم لاختبار الاتصال وإرسال ملخص سريع يدوياً. التنبيهات الفورية لكل فرصة متوقفة؛ التقارير التلقائية المجمعة تُضبط في القسم التالي. توكن البوت محفوظ في أسرار الخادم.</p>
+      </Card>
+
+        </div>
+      </details>
 
       <Card title="الكلمات المفتاحية" desc="سيتم التنبيه بالفرص التي تحتوي على أي من هذه الكلمات.">
         <div className="flex flex-wrap gap-2">
