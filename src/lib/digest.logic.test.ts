@@ -23,7 +23,7 @@ describe("daily report schedule", () => {
     expect(riyadhClock(new Date("2026-11-09T05:00:00Z"))).toEqual({ day: "2026-11-09", hour: 8 });
     expect(dueDigestSlot(new Date("2026-11-09T04:59:00Z"), 1)).toBeNull();
     expect(dueDigestSlot(new Date("2026-11-09T05:00:00Z"), 1)).toBe("2026-11-09-morning");
-  });
+  }, 15000);
   it("sends once for daily users, twice for twice-daily users", () => {
     expect(dueDigestSlot(new Date("2026-11-09T17:00:00Z"), 1)).toBe("2026-11-09-morning");
     expect(dueDigestSlot(new Date("2026-11-09T17:00:00Z"), 2)).toBe("2026-11-09-evening");

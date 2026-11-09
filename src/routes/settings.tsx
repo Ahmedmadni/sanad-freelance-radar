@@ -16,6 +16,7 @@ import { sendTelegramChannelTest } from "@/lib/telegram-channel.functions";
 import { getDigestConfig, saveDigestConfig } from "@/lib/digest.functions";
 import { matchesKeywords } from "@/lib/opportunities";
 import { useLiveSources } from "@/lib/use-live-sources";
+import { PwaInstall } from "@/components/PwaInstall";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -33,8 +34,8 @@ export const Route = createFileRoute("/settings")({
 
 function Card({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border bg-card p-6">
-      <h2 className="font-display text-xl font-bold">{title}</h2>
+    <section className="rounded-2xl border bg-card p-4 sm:p-5">
+      <h2 className="font-display text-lg font-bold">{title}</h2>
       {desc && <p className="mt-1 text-sm text-muted-foreground">{desc}</p>}
       <div className="mt-5 space-y-4">{children}</div>
     </section>
@@ -124,26 +125,12 @@ function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <h1 className="font-display text-3xl font-bold">التنبيهات والإعدادات</h1>
-
-      <Card title="قناة سند العامة — الوجهة الأساسية" desc="كل من ينضم إلى القناة سيشاهد تقارير الفرص، دون الحاجة إلى تسجيل حساب في الموقع أو استقبال رسالة خاصة من البوت.">
-        <p className="text-sm text-muted-foreground">
-          تأكد أن @Ahmedelmadni_bot مشرف في قناة Radar_4_Jobs بصلاحية نشر الرسائل.
-          وتأكد من حفظ مُعرّف القناة في أسرار Lovable Cloud باسم <code>TELEGRAM_CHANNEL_ID</code>؛
-          يمكنك استخدام <code>@channel_username</code> لقناة عامة أو رقم قناة يبدأ بـ <code>-100</code>.
-        </p>
-        <div className="rounded-lg border bg-muted/40 p-3 text-sm">الوجهة العامة: <a href="https://t.me/Radar_4_Jobs" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary underline underline-offset-2" dir="ltr">@Radar_4_Jobs</a> — هذا هو مكان نشر التقارير المجمعة، وليس محادثتك الخاصة.</div>
-        <Button disabled={channelBusy} onClick={() => void testChannel()}>
-          {channelBusy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-          نشر رسالة اختبار إلى قناة @Radar_4_Jobs
-        </Button>
-        <p className="text-xs text-muted-foreground">
-          رسائل الاختبار الخاصة ما زالت تذهب إلى حساب المالك عبر TELEGRAM_CHAT_ID.
-          أما التقارير المجدولة فتُنشر للقناة عبر TELEGRAM_CHANNEL_ID فقط، ولن تُرسل تلقائياً إلى المحادثات الخاصة.
-        </p>
-      </Card>
-
-      <Card title="التقرير التلقائي للقناة العامة" desc="بعد تفعيل مجدول الخادم يبحث سند كل ساعتين حتى لو كان الموقع مغلقاً، وينشر الفرص الجديدة في قناة تليجرام العامة.">
+      <div className="space-y-1">
+        <h1 className="font-display text-2xl font-bold sm:text-3xl">الإعدادات</h1>
+        <p className="text-sm text-muted-foreground">تحكم في تقارير القناة وتثبيت سند على هاتفك. الخيارات الإضافية تجدها بالأسفل.</p>
+      </div>
+      <PwaInstall />
+            <Card title="التقرير التلقائي للقناة العامة" desc="بعد تفعيل مجدول الخادم يبحث سند كل ساعتين حتى لو كان الموقع مغلقاً، وينشر الفرص الجديدة في قناة تليجرام العامة.">
         <div className="flex items-center justify-between">
           <Label>تفعيل التقرير التلقائي</Label>
           <Switch checked={digestEnabled} onCheckedChange={setDigestEnabled} />
@@ -179,21 +166,22 @@ function SettingsPage() {
         )}
       </Card>
 
-      <details className="rounded-xl border bg-card p-4">
-        <summary className="cursor-pointer font-semibold">اختبارات خاصة لحساب المالك فقط (اختياري)</summary>
-        <div className="pt-4">
-      <Card title="رسائل الاختبار الخاصة (ليست للقناة)" desc="هذا القسم لاختبار اتصال البوت مع حساب المالك فقط؛ لا يرسل هنا إلى متابعي القناة. تُحفظ البيانات في أسرار Cloud.">
-        
-        <div className="space-y-2"><Label>الحد الأدنى للميزانية ($)</Label><Input dir="ltr" type="number" value={s.minBudget} onChange={(e) => update({ minBudget: Number(e.target.value) || 0 })} /></div>
-        <div className="flex flex-wrap gap-2">
-          <Button disabled={sending} onClick={() => test(false)}>{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}رسالة تجريبية</Button>
-          <Button variant="outline" disabled={sending} onClick={() => test(true)}>إرسال ملخص خاص إلى حسابي (5 فرص)</Button>
-        </div>
-        <p className="text-xs text-muted-foreground">هذا القسم لاختبار الاتصال وإرسال ملخص سريع يدوياً. التنبيهات الفورية لكل فرصة متوقفة؛ التقارير التلقائية المجمعة تُضبط في القسم التالي. توكن البوت محفوظ في أسرار الخادم.</p>
+      <Card title="قناة سند العامة — الوجهة الأساسية" desc="كل من ينضم إلى القناة سيشاهد تقارير الفرص، دون الحاجة إلى تسجيل حساب في الموقع أو استقبال رسالة خاصة من البوت.">
+        <p className="text-sm text-muted-foreground">
+          تأكد أن @Ahmedelmadni_bot مشرف في قناة Radar_4_Jobs بصلاحية نشر الرسائل.
+          وتأكد من حفظ مُعرّف القناة في أسرار Lovable Cloud باسم <code>TELEGRAM_CHANNEL_ID</code>؛
+          يمكنك استخدام <code>@channel_username</code> لقناة عامة أو رقم قناة يبدأ بـ <code>-100</code>.
+        </p>
+        <div className="rounded-lg border bg-muted/40 p-3 text-sm">الوجهة العامة: <a href="https://t.me/Radar_4_Jobs" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary underline underline-offset-2" dir="ltr">@Radar_4_Jobs</a> — هذا هو مكان نشر التقارير المجمعة، وليس محادثتك الخاصة.</div>
+        <Button disabled={channelBusy} onClick={() => void testChannel()}>
+          {channelBusy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+          نشر رسالة اختبار إلى قناة @Radar_4_Jobs
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          رسائل الاختبار الخاصة ما زالت تذهب إلى حساب المالك عبر TELEGRAM_CHAT_ID.
+          أما التقارير المجدولة فتُنشر للقناة عبر TELEGRAM_CHANNEL_ID فقط، ولن تُرسل تلقائياً إلى المحادثات الخاصة.
+        </p>
       </Card>
-
-        </div>
-      </details>
 
       <Card title="الكلمات المفتاحية" desc="سيتم التنبيه بالفرص التي تحتوي على أي من هذه الكلمات.">
         <div className="flex flex-wrap gap-2">
@@ -209,7 +197,11 @@ function SettingsPage() {
         </form>
       </Card>
 
-      <Card title="مصادر RSS و Webhook" desc="أضف رابط خلاصة RSS/Atom، أو رابط Webhook يُرجع JSON (قائمة فيها title وdescription وurl). تُجلب الفرص كل 5 دقائق وتُحذف المكررات. يُعرض فقط ما يخص السعودية (مدينة سعودية أو ذكر المملكة).">
+      <details className="group rounded-2xl border bg-card p-4 sm:p-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold">
+          <span>مصادر البحث الإضافية</span><span className="text-muted-foreground group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="pt-4">      <Card title="مصادر RSS و Webhook" desc="أضف مصادر RSS أو JSON مخصصة. احفظ إعدادات التقرير لمزامنتها مع البحث الخلفي.">
         {s.sources.map((x) => (
           <div key={x.id} className="flex items-center gap-3 rounded-lg border p-3">
             <Badge variant="outline">{x.type}</Badge>
@@ -231,7 +223,14 @@ function SettingsPage() {
         </div>
       </Card>
 
-      <Card title="البيانات الشخصية والملف المهني" desc="تُضاف إلى عروض التقديم؛ احفظ بياناتك المهنية بعناية لأنها تُرسل لخدمة توليد النص عند الطلب.">
+        </div>
+      </details>
+
+      <details className="group rounded-2xl border bg-card p-4 sm:p-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold">
+          <span>الملف المهني وبيانات التقديم</span><span className="text-muted-foreground group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="pt-4">      <Card title="البيانات الشخصية والملف المهني" desc="تُضاف إلى عروض التقديم؛ احفظ بياناتك المهنية بعناية لأنها تُرسل لخدمة توليد النص عند الطلب.">
         <div className="grid gap-4 sm:grid-cols-2">
           {([
             ["freelancerName", "الاسم الكامل", "text", ""],
@@ -252,7 +251,26 @@ function SettingsPage() {
           ))}
         </div>
         <div className="space-y-2"><Label>نبذة وخبرات</Label><Textarea value={s.bio} onChange={(e) => update({ bio: e.target.value })} className="min-h-28" /></div>
+      </Card>        </div>
+      </details>
+
+      <details className="rounded-xl border bg-card p-4">
+        <summary className="cursor-pointer font-semibold">اختبارات البوت الخاصة (خيارات متقدمة)</summary>
+        <div className="pt-4">
+      <Card title="رسائل الاختبار الخاصة (ليست للقناة)" desc="هذا القسم لاختبار اتصال البوت مع حساب المالك فقط؛ لا يرسل هنا إلى متابعي القناة. تُحفظ البيانات في أسرار Cloud.">
+        
+        <div className="space-y-2"><Label>الحد الأدنى للميزانية ($)</Label><Input dir="ltr" type="number" value={s.minBudget} onChange={(e) => update({ minBudget: Number(e.target.value) || 0 })} /></div>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={sending} onClick={() => test(false)}>{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}رسالة تجريبية</Button>
+          <Button variant="outline" disabled={sending} onClick={() => test(true)}>إرسال ملخص خاص إلى حسابي (5 فرص)</Button>
+        </div>
+        <p className="text-xs text-muted-foreground">هذا القسم لاختبار الاتصال وإرسال ملخص سريع يدوياً. التنبيهات الفورية لكل فرصة متوقفة؛ التقارير التلقائية المجمعة تُضبط في القسم التالي. توكن البوت محفوظ في أسرار الخادم.</p>
       </Card>
+
+        </div>
+      </details>
+
+
     </div>
   );
 }

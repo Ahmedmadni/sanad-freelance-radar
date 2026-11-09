@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "name": "سند | رادار فرص المحاسبة",
+  "short_name": "سند",
+  "description": "رادار فرص المحاسبة والعمل الحر مع تقارير تليجرام مجمعة",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#073b43",
+  "theme_color": "#087c70",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
