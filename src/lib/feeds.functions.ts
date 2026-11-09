@@ -347,19 +347,17 @@ async function fetchUrl(url: string, name: string, trusted: boolean): Promise<It
     .map((i) => ({ ...i, sourceName: name }));
 }
 
-export const fetchSources = createServerFn({ method: "POST" })
-  .middleware([requireOwner])
-  .inputValidator((input: In) => {
-    if (!Array.isArray(input?.sources) || input.sources.length > 20) throw new Error("مصادر غير صالحة");
-    return { sources: input.sources.map((s) => ({ name: String(s.name).slice(0, 80), url: String(s.url).slice(0, 1000), type: s.type })) };
-  })
-  .handler(async ({ data, context }) => {
-    limitOwnerAction(context.userId, "fetch-sources", 120, 60 * 60_000);
+/** Shared collector for the owner UI and the independent scheduled worker. */
+export async function collectAllSources(sources: In["sources"], maxItems = 150) {
     const statuses: Status[] = [];
     const all: Item[] = [];
     const run = async (name: string, url: string, builtIn: boolean, job: () => Promise<Item[]>) => {
       try {
-        const items = await job();
+        const items = await Promise.race([
+          job(),
+          new Promise<never>((_resolve, reject) =>
+            setTimeout(() => reject(new Error("انتهت مهلة المصدر")), 30_000)),
+        ]);
         all.push(...items);
         statuses.push({ name, url, ok: true, count: items.length, error: null, builtIn });
       } catch (e: any) {
@@ -380,15 +378,31 @@ export const fetchSources = createServerFn({ method: "POST" })
       run("بعيد", "https://baaeed.com/remote-jobs", true, () => checkBuyerPage("https://baaeed.com/remote-jobs")),
       ...(["indeed", "naukrigulf", "bayt"] as const).map((site) => run(GLOBAL_JOB_SITES[site].name, GLOBAL_JOB_SITES[site].search, true, () => fetchGlobalJobSite(site))),
       ...BUILT_IN_RSS.map((s) => run(`${s.name} (${s.url.split("job_")[1]?.replace(".xml", "")})`, s.url, true, () => fetchUrl(s.url, s.name, true))),
-      ...data.sources.map((s) => run(s.name, s.url, false, () => fetchUrl(s.url, s.name, false))),
+      ...sources.map((s) => run(s.name, s.url, false, () => fetchUrl(s.url, s.name, false))),
     ]);
 
     all.sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
     const unique = dedupe(all);
     return {
-      items: unique.slice(0, 150).map(toOpportunity),
+      items: unique.slice(0, maxItems).map(toOpportunity),
       duplicatesRemoved: all.length - unique.length,
       statuses,
       fetchedAt: new Date().toISOString(),
     };
+}
+
+/** Interactive discovery is owner-authenticated; background jobs use a separate cron credential. */
+export const fetchSources = createServerFn({ method: "POST" })
+  .middleware([requireOwner])
+  .inputValidator((input: In) => {
+    if (!Array.isArray(input?.sources) || input.sources.length > 20) throw new Error("مصادر غير صالحة");
+    return { sources: input.sources.map((s) => ({
+      name: String(s.name).slice(0, 80),
+      url: String(s.url).slice(0, 1000),
+      type: s.type,
+    })) };
+  })
+  .handler(async ({ data, context }) => {
+    limitOwnerAction(context.userId, "fetch-sources", 120, 60 * 60_000);
+    return collectAllSources(data.sources);
   });
