@@ -13,7 +13,7 @@ async function authorize(request: Request): Promise<Response | null> {
   return null;
 }
 
-export const Route = createFileRoute("/api/radar-cron")({
+export const Route = createFileRoute("/api/radar-cron" as never)({
   server: {
     handlers: {
       POST: async ({ request }) => {
