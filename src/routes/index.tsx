@@ -50,6 +50,7 @@ function Dashboard() {
     if (urgency !== "all" && o.urgency !== urgency) return false;
     if (platform !== "all" && o.platform !== platform) return false;
     if (employment !== "all" && o.employment !== employment) return false;
+    if (budget !== "all" && (o.budgetCurrency !== "USD" || o.budgetMax <= 0)) return false;
     if (budget === "lt250" && o.budgetMax >= 250) return false;
     if (budget === "250-1000" && (o.budgetMax < 250 || o.budgetMin > 1000)) return false;
     if (budget === "gt1000" && o.budgetMax <= 1000) return false;
@@ -61,7 +62,7 @@ function Dashboard() {
     { icon: Briefcase, label: "فرص نشطة", value: SEED.length },
     { icon: Flame, label: "عاجلة", value: SEED.filter((o) => o.urgency === "عاجل").length },
     { icon: Target, label: "تطابق كلماتك", value: matched },
-    { icon: Wallet, label: "متوسط الميزانية", value: `$${Math.round(SEED.reduce((a, o) => a + (o.budgetMax > 0 ? (o.budgetMin + o.budgetMax) / 2 : 0), 0) / Math.max(1, SEED.filter((o) => o.budgetMax > 0).length))}` },
+    { icon: Wallet, label: "فرص بميزانية معلنة", value: SEED.filter((o) => o.budgetMax > 0 && o.budgetCurrency).length },
   ];
 
   return (
