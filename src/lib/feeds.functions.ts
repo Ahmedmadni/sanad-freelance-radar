@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireOwner, limitOwnerAction } from "./owner-auth";
 import { parseFeed, parseJson, dedupe, isAccounting, isAccountingRequest, isSaudi, toOpportunity, parseLinkedIn, inferEmployment, type RawItem } from "./feeds";
 import type { Employment } from "./opportunities";
 import { parseWadhefa, parseWadhefaDetail, parseMihnatiLinks, parseMihnati, parseMourjan, parseOpenSooq, parseOpenSooqLinks, parseOpenSooqDetail, parseStructuredSaudiJobs, parseGlobalJobLinks, GLOBAL_JOB_SITES, type GlobalJobSite } from "./saudi-job-sites";
@@ -324,11 +325,13 @@ async function fetchUrl(url: string, name: string, trusted: boolean): Promise<It
 }
 
 export const fetchSources = createServerFn({ method: "POST" })
+  .middleware([requireOwner])
   .inputValidator((input: In) => {
     if (!Array.isArray(input?.sources) || input.sources.length > 20) throw new Error("مصادر غير صالحة");
     return { sources: input.sources.map((s) => ({ name: String(s.name).slice(0, 80), url: String(s.url).slice(0, 1000), type: s.type })) };
   })
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    limitOwnerAction(context.userId, "fetch-sources", 120, 60 * 60_000);
     const statuses: Status[] = [];
     const all: Item[] = [];
     const run = async (name: string, url: string, builtIn: boolean, job: () => Promise<Item[]>) => {
