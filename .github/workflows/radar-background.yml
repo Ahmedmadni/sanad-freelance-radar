@@ -24,13 +24,16 @@ jobs:
       - name: Verify scheduler configuration
         run: |
           if [ -z "$SANAD_DIGEST_URL" ] || [ -z "$SANAD_DIGEST_CRON_SECRET" ]; then
-            echo "::error::Set GitHub Actions secrets SANAD_DIGEST_URL and SANAD_DIGEST_CRON_SECRET before enabling the scheduler."
-            exit 1
+            echo "::warning::Scheduler is dormant until GitHub Actions secrets SANAD_DIGEST_URL and SANAD_DIGEST_CRON_SECRET are configured."
+            echo "RUN_RADAR=false" >> "$GITHUB_ENV"
+            exit 0
           fi
+          echo "RUN_RADAR=true" >> "$GITHUB_ENV"
           case "$SANAD_DIGEST_URL" in
             https://*/api/radar-cron) ;;
             *) echo "::error::SANAD_DIGEST_URL must be a HTTPS URL ending in /api/radar-cron"; exit 1 ;;
           esac
       - name: Discover and deliver due digest
+        if: env.RUN_RADAR == 'true'
         run: |
           curl --fail-with-body --silent --show-error --max-time 240             -X POST -H "Authorization: Bearer $SANAD_DIGEST_CRON_SECRET"             -H "Content-Type: application/json"             "$SANAD_DIGEST_URL"
