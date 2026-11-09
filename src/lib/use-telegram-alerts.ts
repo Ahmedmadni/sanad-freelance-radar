@@ -16,7 +16,7 @@ export function useTelegramAlerts(settings: Settings) {
   const send = useServerFn(sendTelegramTest);
   const q = useLiveSources(settings.sources);
   const busy = useRef(false);
-  const ready = settings.alertsEnabled && !!settings.botToken && !!settings.chatId;
+  const ready = settings.alertsEnabled;
 
   useEffect(() => {
     const items = q.data?.items;
@@ -45,7 +45,7 @@ export function useTelegramAlerts(settings: Settings) {
           `${esc(o.description.slice(0, 300))}\n\n` +
           `📍 المصدر: ${esc(o.sourceName ?? o.platform)}\n💰 الميزانية: ${budget}\n🕒 ${formatDate(o.publishedAt)}\n${o.url}`;
         try {
-          await send({ data: { token: settings.botToken.trim(), chatId: settings.chatId.trim(), text } });
+          await send({ data: { text } });
           sent.add(alertKey(o));
           ok++;
         } catch (e: any) {
@@ -57,7 +57,7 @@ export function useTelegramAlerts(settings: Settings) {
       if (ok) toast.success(`أُرسل ${ok} تنبيه إلى تليجرام`);
       busy.current = false;
     })();
-  }, [q.data, ready, settings.keywords, settings.minBudget, settings.botToken, settings.chatId, send]);
+  }, [q.data, ready, settings.keywords, settings.minBudget, send]);
 }
 
 export function resetAlertBaseline() {
