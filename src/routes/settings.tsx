@@ -50,7 +50,7 @@ function SettingsPage() {
   async function test(digest: boolean) {
     setSending(true);
     try {
-      const matched = (live.data?.items ?? []).filter((o) => matchesKeywords(o, s.keywords) && o.budgetMax >= s.minBudget).slice(0, 5);
+      const matched = (live.data?.items ?? []).filter((o) => matchesKeywords(o, s.keywords) && (o.budgetCurrency === "USD" && o.budgetMax >= s.minBudget || o.budgetMax === 0)).slice(0, 5);
       const text = digest
         ? `<b>📡 رادار فرص المحاسبة</b>\n${matched.length} فرص تطابق كلماتك:\n\n` +
           matched.map((o) => `• <b>${o.title}</b>\n  ${o.platform} | $${o.budgetMin}-${o.budgetMax} | ${o.urgency}\n  ${o.url}`).join("\n\n")
