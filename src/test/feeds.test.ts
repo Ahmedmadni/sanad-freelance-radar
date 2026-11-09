@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dedupe, parseFeed, isAccounting, isAccountingRequest } from "@/lib/feeds";
+import { dedupe, parseFeed, isAccounting, isAccountingRequest, parseBudget, inferWorkMode } from "@/lib/feeds";
 
 describe("feeds", () => {
   it("removes duplicates with the same link (ignoring query string)", () => {
@@ -10,12 +10,12 @@ describe("feeds", () => {
     expect(r).toHaveLength(1);
   });
 
-  it("removes duplicates with the same title across sources", () => {
+  it("keeps independent jobs even when titles match across sources", () => {
     const r = dedupe([
       { title: "إعداد قوائم مالية!", link: "https://a.com/1" },
       { title: "إعداد  قوائم مالية", link: "https://b.com/9" },
     ]);
-    expect(r).toHaveLength(1);
+    expect(r).toHaveLength(2);
   });
 
   it("parses RSS link and date", () => {
@@ -68,7 +68,7 @@ describe("employment type", () => {
   it("detects part-time", () => expect(inferEmployment("مطلوب محاسب دوام جزئي بالرياض")).toBe("دوام جزئي"));
   it("detects full-time", () => expect(inferEmployment("شاغر وظيفي محاسب دوام كامل")).toBe("دوام كامل"));
   it("does not classify a remote interview as part-time work", () => expect(inferEmployment("مطلوب رئيس حسابات في مصنع بالقصيم المقابلات الشخصية ستكون عن بعد")).toBe("غير محدد"));
-  it("keeps explicitly remote accounting contracts as part-time", () => expect(inferEmployment("مطلوب محاسب عن بعد بالرياض")).toBe("دوام جزئي"));
+  it("keeps explicitly remote accounting contracts as part-time", () => expect(inferEmployment("مطلوب محاسب عن بعد بالرياض")).toBe("غير محدد"));
   it("preserves explicit full-time work when a project is mentioned", () => {
     expect(inferEmployment("مطلوب محاسب دوام كامل لمشروع في الرياض")).toBe("دوام كامل");
     expect(inferEmployment("Full-time accountant for a construction project in Riyadh")).toBe("دوام كامل");
@@ -93,5 +93,27 @@ describe("accounting employer requests only", () => {
   });
   it("excludes an accountant looking for a job", () => {
     expect(isAccountingRequest("أنا محاسب أبحث عن وظيفة في جدة", true)).toBe(false);
+  });
+});
+
+describe("data quality regression", () => {
+  it("preserves SAR rather than falsely labelling amounts as USD", () => {
+    expect(parseBudget("الأجر 2000 ريال")).toEqual({ min: 2000, max: 2000, currency: "SAR" });
+  });
+  it("rejects comparing different currencies as one range", () => {
+    expect(parseBudget("2000 ريال أو 500 دولار")).toEqual({ min: 0, max: 0, currency: null });
+  });
+  it("does not mistake dates and VAT percentages for a budget", () => {
+    expect(parseBudget("15% VAT بتاريخ 09-11-2026")).toEqual({ min: 0, max: 0, currency: null });
+  });
+  it("preserves meaningful job-id query parameters", () => {
+    expect(dedupe([
+      {title:"محاسب",link:"https://example.com/jobs?id=1"},
+      {title:"محاسب",link:"https://example.com/jobs?id=2"},
+    ])).toHaveLength(2);
+  });
+  it("separates remote work from employment type and ignores remote interviews", () => {
+    expect(inferWorkMode("محاسب للعمل عن بعد")).toBe("عن بعد");
+    expect(inferWorkMode("المقابلات الشخصية ستكون عن بعد")).toBe("غير محدد");
   });
 });
