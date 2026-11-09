@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { Moon, Sun, Radar } from "lucide-react";
+import { Moon, Sun, Radar, LogOut } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useSettings } from "@/lib/settings";
 import { useTelegramAlerts } from "@/lib/use-telegram-alerts";
@@ -47,6 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
+          <Button variant="ghost" size="sm" onClick={() => void supabase.auth.signOut()}><LogOut className="size-4" />خروج</Button>
           <Button variant="ghost" size="icon" className="ms-auto" onClick={toggle} aria-label="تبديل الوضع">
             {dark ? <Sun className="size-5" /> : <Moon className="size-5" />}
           </Button>
