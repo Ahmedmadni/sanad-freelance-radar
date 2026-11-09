@@ -24,6 +24,8 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const currency = o.budgetCurrency === "SAR" ? "ر.س" : o.budgetCurrency === "USD" ? "$" : "";
+  const budgetLabel = o.budgetMax > 0 && currency ? `${o.budgetMin} – ${o.budgetMax} ${currency}` : "غير محددة";
   const adText = `${o.title} ${o.description}`;
   const phone = extractSaudiPhone(adText);
   const email = extractEmail(adText);
@@ -51,7 +53,7 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
         data: {
           title: o.title,
           description: o.description,
-          budget: o.budgetMax > 0 ? `${o.budgetMin} - ${o.budgetMax} $` : "غير محددة",
+          budget: budgetLabel,
           client: o.client,
           name: settings.freelancerName,
           bio: [
@@ -87,6 +89,7 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">{o.platform}</Badge>
         {o.employment && o.employment !== "غير محدد" && <Badge variant="secondary">{o.employment}</Badge>}
+        {o.workMode && o.workMode !== "غير محدد" && <Badge variant="outline">{o.workMode}</Badge>}
         <span className="ms-auto flex items-center gap-1 text-muted-foreground"><Clock className="size-3" />{timeAgo(o.postedMinutesAgo)}</span>
       </div>
       <h3 className="mt-3 font-display text-lg font-bold leading-snug text-card-foreground">{o.title}</h3>
@@ -120,8 +123,8 @@ export function OpportunityCard({ o, settings, fresh }: { o: Opportunity; settin
         </div>
       )}
       <div className="mt-4 flex flex-wrap items-center gap-3 border-t pt-4">
-        {o.budgetMax > 0 ? <div className="font-mono text-base font-semibold text-primary" dir="ltr">${o.budgetMin} – ${o.budgetMax}</div> : <div className="text-sm text-muted-foreground">الميزانية غير محددة</div>}
-        <span className="flex items-center gap-1 text-xs text-muted-foreground"><Users className="size-3" />{o.offers} عروض</span>
+        {o.budgetMax > 0 && currency ? <div className="font-mono text-base font-semibold text-primary" dir="ltr">{budgetLabel}</div> : <div className="text-sm text-muted-foreground">الميزانية غير محددة</div>}
+        {o.offers !== null && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Users className="size-3" />{o.offers} عروض</span>}
         <div className="ms-auto flex gap-2">
           <Button size="sm" variant="ghost" asChild>
             <a href={o.url} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /></a>
