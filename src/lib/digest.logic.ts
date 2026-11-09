@@ -4,7 +4,10 @@ export type RadarFrequency = 1 | 2;
 
 export type DigestEntry = Pick<Opportunity,
   "id" | "title" | "platform" | "url" | "description" |
-  "budgetMin" | "budgetMax" | "budgetCurrency" | "employment" | "workMode">;
+  "budgetMin" | "budgetMax" | "budgetCurrency"> & {
+  employment?: Opportunity["employment"] | undefined;
+  workMode?: Opportunity["workMode"] | undefined;
+};
 
 export type DigestPart = { text: string; ids: string[] };
 
