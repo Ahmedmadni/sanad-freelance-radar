@@ -47,13 +47,15 @@ function SettingsPage() {
   const [sending, setSending] = useState(false);
   const [src, setSrc] = useState<Omit<Source, "id">>({ type: "RSS", name: "", url: "" });
 
+  const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
   async function test(digest: boolean) {
     setSending(true);
     try {
-      const matched = (live.data?.items ?? []).filter((o) => matchesKeywords(o, s.keywords) && o.budgetMax >= s.minBudget).slice(0, 5);
+      const matched = (live.data?.items ?? []).filter((o) => matchesKeywords(o, s.keywords) && (s.minBudget <= 0 || o.budgetMax === 0 || (o.budgetCurrency === "USD" && o.budgetMax >= s.minBudget))).slice(0, 5);
       const text = digest
         ? `<b>📡 رادار فرص المحاسبة</b>\n${matched.length} فرص تطابق كلماتك:\n\n` +
-          matched.map((o) => `• <b>${o.title}</b>\n  ${o.platform} | $${o.budgetMin}-${o.budgetMax} | ${o.urgency}\n  ${o.url}`).join("\n\n")
+          matched.map((o) => `• <b>${escapeHtml(o.title)}</b>\n  ${escapeHtml(o.platform)} | ${o.budgetMax > 0 && o.budgetCurrency ? `${o.budgetMin}-${o.budgetMax} ${o.budgetCurrency}` : "غير محددة"} | ${escapeHtml(o.urgency)}\n  ${escapeHtml(o.url)}`).join("\n\n")
         : "✅ تم ربط رادار فرص المحاسبة بنجاح!";
       await send({ data: { token: s.botToken.trim(), chatId: s.chatId.trim(), text } });
       toast.success("تم إرسال الرسالة إلى تليجرام");
