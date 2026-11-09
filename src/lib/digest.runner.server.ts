@@ -24,8 +24,8 @@ type Stored = {
   currency: "SAR" | "USD" | null;
   budget_min: number;
   budget_max: number;
-  employment: string | null;
-  work_mode: string | null;
+  employment: Opportunity["employment"] | null;
+  work_mode: Opportunity["workMode"] | null;
   first_seen: string;
 };
 
