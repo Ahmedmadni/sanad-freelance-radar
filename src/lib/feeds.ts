@@ -100,7 +100,7 @@ const normLink = (raw: string) => {
     const url = new URL(raw.trim());
     url.hash = "";
     for (const key of [...url.searchParams.keys()]) {
-      if (/^utm_/i.test(key) || /^(fbclid|gclid|mc_cid|mc_eid)$/i.test(key)) url.searchParams.delete(key);
+      if (/^utm(?:_|$)/i.test(key) || /^(fbclid|gclid|mc_cid|mc_eid)$/i.test(key)) url.searchParams.delete(key);
     }
     url.searchParams.sort();
     url.pathname = url.pathname.replace(/\/+$/, "") || "/";
