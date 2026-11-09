@@ -45,9 +45,8 @@ function SettingsPage() {
   const live = useLiveSources(s.sources);
   const [kw, setKw] = useState("");
   const [sending, setSending] = useState(false);
+  const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const [src, setSrc] = useState<Omit<Source, "id">>({ type: "RSS", name: "", url: "" });
-
-  const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   async function test(digest: boolean) {
     setSending(true);
@@ -57,7 +56,7 @@ function SettingsPage() {
         ? `<b>📡 رادار فرص المحاسبة</b>\n${matched.length} فرص تطابق كلماتك:\n\n` +
           matched.map((o) => `• <b>${escapeHtml(o.title)}</b>\n  ${escapeHtml(o.platform)} | ${o.budgetMax > 0 && o.budgetCurrency ? `${o.budgetMin}-${o.budgetMax} ${o.budgetCurrency}` : "غير محددة"} | ${escapeHtml(o.urgency)}\n  ${escapeHtml(o.url)}`).join("\n\n")
         : "✅ تم ربط رادار فرص المحاسبة بنجاح!";
-      await send({ data: { token: s.botToken.trim(), chatId: s.chatId.trim(), text } });
+      await send({ data: { text } });
       toast.success("تم إرسال الرسالة إلى تليجرام");
     } catch (e: any) {
       toast.error(e?.message ?? "فشل الإرسال");
@@ -70,16 +69,14 @@ function SettingsPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <h1 className="font-display text-3xl font-bold">التنبيهات والإعدادات</h1>
 
-      <Card title="بوت تليجرام" desc="أنشئ بوتاً عبر @BotFather وانسخ التوكن، ثم أرسل أي رسالة للبوت واحصل على معرف الشات من @userinfobot.">
+      <Card title="بوت تليجرام" desc="تُحفظ بيانات الدخول إلى تليجرام في أسرار الخادم فقط. اضبط TELEGRAM_BOT_TOKEN و TELEGRAM_CHAT_ID في Lovable Cloud.">
         <div className="flex items-center justify-between"><Label>تفعيل التنبيهات</Label><Switch checked={s.alertsEnabled} onCheckedChange={(v) => update({ alertsEnabled: v })} /></div>
-        <div className="space-y-2"><Label>توكن البوت</Label><Input dir="ltr" type="password" value={s.botToken} onChange={(e) => update({ botToken: e.target.value })} placeholder="123456789:AA..." /></div>
-        <div className="space-y-2"><Label>معرف الشات (Chat ID)</Label><Input dir="ltr" value={s.chatId} onChange={(e) => update({ chatId: e.target.value })} placeholder="123456789" /></div>
         <div className="space-y-2"><Label>الحد الأدنى للميزانية ($)</Label><Input dir="ltr" type="number" value={s.minBudget} onChange={(e) => update({ minBudget: Number(e.target.value) || 0 })} /></div>
         <div className="flex flex-wrap gap-2">
-          <Button disabled={sending || !s.botToken || !s.chatId} onClick={() => test(false)}>{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}رسالة تجريبية</Button>
-          <Button variant="outline" disabled={sending || !s.botToken || !s.chatId} onClick={() => test(true)}>إرسال ملخص الفرص المطابقة</Button>
+          <Button disabled={sending} onClick={() => test(false)}>{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}رسالة تجريبية</Button>
+          <Button variant="outline" disabled={sending} onClick={() => test(true)}>إرسال ملخص الفرص المطابقة</Button>
         </div>
-        <p className="text-xs text-muted-foreground">عند تفعيل التنبيهات، تصلك رسالة تلقائية لكل فرصة جديدة من مصادرك تطابق كلماتك المفتاحية (تُفحص المصادر كل 5 دقائق أثناء فتح التطبيق). الفرص الموجودة عند أول تشغيل لا تُرسل. تُحفظ البيانات في متصفحك فقط.</p>
+        <p className="text-xs text-muted-foreground">عند تفعيل التنبيهات، تصلك رسالة تلقائية لكل فرصة جديدة من مصادرك تطابق كلماتك المفتاحية (تُفحص المصادر كل 5 دقائق أثناء فتح التطبيق). الفرص الموجودة عند أول تشغيل لا تُرسل. إعدادات البحث محفوظة في المتصفح، أما توكن تليجرام ومعرف الدردشة فيُحفظان في أسرار الخادم فقط.</p>
       </Card>
 
       <Card title="الكلمات المفتاحية" desc="سيتم التنبيه بالفرص التي تحتوي على أي من هذه الكلمات.">
@@ -118,7 +115,7 @@ function SettingsPage() {
         </div>
       </Card>
 
-      <Card title="البيانات الشخصية والملف المهني" desc="تُضاف تلقائياً إلى عروض التقديم (الاسم ووسائل التواصل والخبرة). تُحفظ في متصفحك فقط.">
+      <Card title="البيانات الشخصية والملف المهني" desc="تُضاف إلى عروض التقديم؛ احفظ بياناتك المهنية بعناية لأنها تُرسل لخدمة توليد النص عند الطلب.">
         <div className="grid gap-4 sm:grid-cols-2">
           {([
             ["freelancerName", "الاسم الكامل", "text", ""],
