@@ -38,11 +38,12 @@ export function useTelegramAlerts(settings: Settings) {
     (async () => {
       let ok = 0;
       for (const o of fresh) {
-        const budget = o.budgetMax > 0 ? `$${o.budgetMin}-${o.budgetMax}` : "غير محددة";
+        const currency = o.budgetCurrency === "SAR" ? "ريال" : o.budgetCurrency === "USD" ? "USD" : null;
+        const budget = o.budgetMax > 0 && currency ? `${o.budgetMin}-${o.budgetMax} ${currency}` : "غير محددة";
         const text =
           `🔔 <b>فرصة جديدة تطابق كلماتك</b>\n\n<b>${esc(o.title)}</b>\n` +
           `${esc(o.description.slice(0, 300))}\n\n` +
-          `📍 المصدر: ${esc(o.sourceName ?? o.platform)}\n💰 الميزانية: ${budget}\n🕒 ${formatDate(o.publishedAt)}\n${o.url}`;
+          `📍 المصدر: ${esc(o.sourceName ?? o.platform)}\n💰 الميزانية: ${budget}\n🕒 ${formatDate(o.publishedAt)}\n${esc(o.url)}`;
         try {
           await send({ data: { token: settings.botToken.trim(), chatId: settings.chatId.trim(), text } });
           sent.add(alertKey(o));

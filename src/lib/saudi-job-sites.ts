@@ -94,7 +94,7 @@ export function parseMourjan(html: string, now = Date.now()): SaudiJob[] {
   for (const block of html.split('<div class=widget id=').slice(1)) {
     const raw = block.match(/href=["']?(\/sa\/[^\s>"']+)/)?.[1];
     const link = raw ? jobUrl(raw, "https://www.mourjan.com") : null;
-    const description = decode(block.match(/class="content[^\"]*">([\s\S]*?)<\/div>/)?.[1] ?? "");
+    const description = decode(block.match(/class="content[^"]*">([\s\S]*?)<\/div>/)?.[1] ?? "");
     if (!link || !/^\/sa\/(?:[^/]+\/)?accounting\/vacancies\/\d+\/$/.test(new URL(link).pathname)) continue;
     if (!isAccountingRequest(description, true) || /تم شغل|انتهى الإعلان|انتهى الاعلان|التقديم مغلق/.test(description)) continue;
     const when = decode(block.match(/<div>(منذ[^<]+)<\/div>/)?.[1] ?? "");
@@ -213,7 +213,7 @@ export function parseStructuredSaudiJobs(html: string, link: string, origin: str
       const url = jobUrl(job.url ?? link, origin, true);
       if (!saudi || !url || !title || !isAccounting(`${title} ${description}`)) continue;
       const types = [job.employmentType ?? []].flat();
-      const employment: Employment = types.includes("PART_TIME") ? "دوام جزئي" : types.includes("FULL_TIME") ? "دوام كامل" : inferEmployment(description);
+      const employment: Employment = types.includes("PART_TIME") ? "دوام جزئي" : types.includes("FULL_TIME") ? "دوام كامل" : types.some((type) => /^(CONTRACTOR|TEMPORARY|CONTRACT|FIXED_TERM)$/.test(type)) ? "عقد مؤقت" : inferEmployment(description);
       const date = Date.parse(job.datePosted ?? "");
       out.push({ title, description: description.slice(0, 600), link: url, publishedAt: Number.isFinite(date) ? new Date(date).toISOString() : null,
         location: `${decode(job.hiringOrganization?.name ?? "")} · ${saudi.address?.addressLocality ?? "السعودية"}`, employment });

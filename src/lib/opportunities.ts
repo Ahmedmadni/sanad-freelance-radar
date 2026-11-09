@@ -1,7 +1,7 @@
 export type Platform = string;
 export type Skill = "دفاتر" | "ضرائب" | "إكسل" | "ERP" | "قوائم مالية" | "تدقيق" | "دراسة جدوى";
-export type Employment = "دوام كامل" | "دوام جزئي" | "غير محدد";
-export const EMPLOYMENTS: Employment[] = ["دوام كامل", "دوام جزئي", "غير محدد"];
+export type Employment = "دوام كامل" | "دوام جزئي" | "عمل حر" | "عقد مؤقت" | "غير محدد";
+export const EMPLOYMENTS: Employment[] = ["دوام كامل", "دوام جزئي", "عمل حر", "عقد مؤقت", "غير محدد"];
 export type Urgency = "عاجل" | "متوسط" | "عادي";
 
 export interface Opportunity {
@@ -11,15 +11,17 @@ export interface Opportunity {
   platform: Platform;
   budgetMin: number;
   budgetMax: number;
+  budgetCurrency?: "SAR" | "USD" | null;
   skills: Skill[];
   tools?: string[];
   urgency: Urgency;
-  postedMinutesAgo: number;
-  offers: number;
+  postedMinutesAgo: number | null;
+  offers: number | null;
   client: string;
   url: string;
   sourceName?: string;
   employment?: Employment;
+  workMode?: "عن بعد" | "حضوري" | "هجين" | "غير محدد";
   publishedAt?: string | null;
 }
 
@@ -38,7 +40,8 @@ export const DEFAULT_KEYWORDS = [
   "tax",
 ];
 
-export function timeAgo(min: number) {
+export function timeAgo(min: number | null) {
+  if (min === null) return "تاريخ غير معروف";
   if (min < 1) return "الآن";
   if (min < 60) return `منذ ${min} دقيقة`;
   const h = Math.floor(min / 60);
@@ -48,5 +51,5 @@ export function timeAgo(min: number) {
 
 export function matchesKeywords(o: Opportunity, keywords: string[]) {
   const text = `${o.title} ${o.description} ${o.skills.join(" ")}`;
-  return keywords.some((k) => k.split(" ").some((w) => w.length > 2 && text.includes(w)));
+  return keywords.some((k) => k.toLowerCase().split(" ").some((w) => w.length > 2 && text.toLowerCase().includes(w)));
 }
