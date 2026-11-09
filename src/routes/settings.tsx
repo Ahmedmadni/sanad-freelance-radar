@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Send, Plus, X, Trash2, Loader2 } from "lucide-react";
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSettings, type Source } from "@/lib/settings";
 import { sendTelegramTest } from "@/lib/ai.functions";
+import { getDigestConfig, saveDigestConfig } from "@/lib/digest.functions";
 import { matchesKeywords } from "@/lib/opportunities";
 import { useLiveSources } from "@/lib/use-live-sources";
 
@@ -43,6 +44,47 @@ function SettingsPage() {
   const [s, update] = useSettings();
   const send = useServerFn(sendTelegramTest);
   const live = useLiveSources(s.sources);
+  const loadDigest = useServerFn(getDigestConfig);
+  const saveDigest = useServerFn(saveDigestConfig);
+  const [digestEnabled, setDigestEnabled] = useState(true);
+  const [digestFrequency, setDigestFrequency] = useState<1 | 2>(1);
+  const [digestBusy, setDigestBusy] = useState(false);
+  const [digestInfo, setDigestInfo] = useState<{
+    pendingCount: number;
+    sourcesCount: number;
+    lastRun: { status: string; slot_key: string; opportunity_count: number; message_count: number; finished_at: string | null; error: string | null } | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    loadDigest({ data: {} }).then((value) => {
+      if (!active) return;
+      setDigestEnabled(value.enabled);
+      setDigestFrequency(value.sendsPerDay);
+      setDigestInfo({ pendingCount: value.pendingCount, sourcesCount: value.sourcesCount, lastRun: value.lastRun });
+    }).catch(() => {
+      if (active) toast.error("تعذر تحميل حالة التقارير التلقائية");
+    });
+    return () => { active = false; };
+  }, [loadDigest]);
+
+  async function saveDailyDigest() {
+    setDigestBusy(true);
+    try {
+      await saveDigest({ data: {
+        enabled: digestEnabled, sendsPerDay: digestFrequency,
+        sources: s.sources.map(({ name, url, type }) => ({ name, url, type })),
+      } });
+      const info = await loadDigest({ data: {} });
+      setDigestInfo({ pendingCount: info.pendingCount, sourcesCount: info.sourcesCount, lastRun: info.lastRun });
+      toast.success("تم حفظ جدول التقارير ومصادر البحث في قاعدة البيانات");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر حفظ إعدادات التقارير");
+    } finally {
+      setDigestBusy(false);
+    }
+  }
+
   const [kw, setKw] = useState("");
   const [sending, setSending] = useState(false);
   const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -70,13 +112,49 @@ function SettingsPage() {
       <h1 className="font-display text-3xl font-bold">التنبيهات والإعدادات</h1>
 
       <Card title="بوت تليجرام" desc="تُحفظ بيانات الدخول إلى تليجرام في أسرار الخادم فقط. اضبط TELEGRAM_BOT_TOKEN و TELEGRAM_CHAT_ID في Lovable Cloud.">
-        <div className="flex items-center justify-between"><Label>تفعيل التنبيهات</Label><Switch checked={s.alertsEnabled} onCheckedChange={(v) => update({ alertsEnabled: v })} /></div>
+        
         <div className="space-y-2"><Label>الحد الأدنى للميزانية ($)</Label><Input dir="ltr" type="number" value={s.minBudget} onChange={(e) => update({ minBudget: Number(e.target.value) || 0 })} /></div>
         <div className="flex flex-wrap gap-2">
           <Button disabled={sending} onClick={() => test(false)}>{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}رسالة تجريبية</Button>
-          <Button variant="outline" disabled={sending} onClick={() => test(true)}>إرسال ملخص الفرص المطابقة</Button>
+          <Button variant="outline" disabled={sending} onClick={() => test(true)}>إرسال ملخص سريع (5 فرص)</Button>
         </div>
-        <p className="text-xs text-muted-foreground">عند تفعيل التنبيهات، تصلك رسالة تلقائية لكل فرصة جديدة من مصادرك تطابق كلماتك المفتاحية (تُفحص المصادر كل 5 دقائق أثناء فتح التطبيق). الفرص الموجودة عند أول تشغيل لا تُرسل. إعدادات البحث محفوظة في المتصفح، أما توكن تليجرام ومعرف الدردشة فيُحفظان في أسرار الخادم فقط.</p>
+        <p className="text-xs text-muted-foreground">هذا القسم لاختبار الاتصال وإرسال ملخص سريع يدوياً. التنبيهات الفورية لكل فرصة متوقفة؛ التقارير التلقائية المجمعة تُضبط في القسم التالي. توكن البوت محفوظ في أسرار الخادم.</p>
+      </Card>
+
+      <Card title="التقرير التلقائي الشامل" desc="النظام يفحص مصادر الفرص كل ساعتين على الخادم حتى عند إغلاق الموقع، ويجمع جميع فرص المحاسبة الجديدة في تقرير يومي كامل.">
+        <div className="flex items-center justify-between">
+          <Label>تفعيل التقرير التلقائي</Label>
+          <Switch checked={digestEnabled} onCheckedChange={setDigestEnabled} />
+        </div>
+        <div className="space-y-2">
+          <Label>عدد التقارير اليومية — توقيت الرياض</Label>
+          <Select value={String(digestFrequency)} onValueChange={(value) => setDigestFrequency(value === "2" ? 2 : 1)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">مرة يومياً — الساعة 8 صباحاً</SelectItem>
+              <SelectItem value="2">مرتان يومياً — 8 صباحاً و8 مساءً</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button disabled={digestBusy} onClick={() => void saveDailyDigest()}>
+          {digestBusy && <Loader2 className="size-4 animate-spin" />}
+          حفظ جدول الإرسال ومزامنة مصادر البحث
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          التقرير يشمل جميع الفرص الجديدة التي اكتشفها الرادار منذ آخر تقرير، وليس أول خمس فرص فقط.
+          وإذا تجاوزت القائمة الحد المسموح به لرسالة تليجرام تُرسل على عدة أجزاء ضمن التقرير نفسه.
+          يحتاج التشغيل المستقل إلى تفعيل مهمة GitHub Actions المجدولة وربط أسرارها بالخادم.
+        </p>
+        {digestInfo && (
+          <div className="space-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
+            <div>فرص مكتشفة تنتظر التقرير: <b>{digestInfo.pendingCount}</b></div>
+            <div>مصادر إضافية تمت مزامنتها: <b>{digestInfo.sourcesCount}</b></div>
+            <div>آخر تقرير: {digestInfo.lastRun
+              ? `${digestInfo.lastRun.status === "sent" ? "تم الإرسال" : digestInfo.lastRun.status === "failed" ? "فشل الإرسال" : "جارٍ الإرسال"} | ${digestInfo.lastRun.opportunity_count} فرصة | ${digestInfo.lastRun.message_count} رسالة`
+              : "لم يُرسل أي تقرير مجدول بعد"}
+            </div>
+          </div>
+        )}
       </Card>
 
       <Card title="الكلمات المفتاحية" desc="سيتم التنبيه بالفرص التي تحتوي على أي من هذه الكلمات.">
