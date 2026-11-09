@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { collectAllSources } from "./feeds.functions";
+import { postTelegramChannel } from "./telegram-channel.server";
 import { dueDigestSlot, formatDigestParts, type RadarFrequency } from "./digest.logic";
 import type { Source } from "./settings";
 import type { Opportunity } from "./opportunities";
@@ -49,29 +50,6 @@ function toRow(op: Opportunity, owner: string) {
     work_mode: op.workMode ?? null,
     published_at: op.publishedAt ?? null,
   };
-}
-
-async function postTelegram(text: string) {
-  const bot = process.env["TELEGRAM_BOT_TOKEN"];
-  const chat = process.env["TELEGRAM_CHAT_ID"];
-  if (!bot || !chat) throw new Error("Telegram server secrets are not configured");
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch("https://api.telegram.org/bot" + bot + "/sendMessage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: true }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    const body = await res.json() as { ok?: boolean; parameters?: { retry_after?: number } };
-    if (res.ok && body.ok) return;
-    if (res.status === 429 && attempt < 2) {
-      const seconds = Math.min(30, Math.max(1, body.parameters?.retry_after ?? 3));
-      await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
-      continue;
-    }
-    throw new Error("Telegram could not deliver a digest (HTTP " + res.status + ")");
-  }
 }
 
 async function getPending(owner: string): Promise<Stored[]> {
@@ -137,7 +115,7 @@ async function sendDueDigest(owner: string, slot: string, now: Date) {
     }));
     const messages = formatDigestParts(items, slot);
     for (const part of messages) {
-      await postTelegram(part.text);
+      await postTelegramChannel(part.text);
       messageCount++;
       // Mark each successfully sent chunk, so retrying never discards unsent work.
       for (let i = 0; i < part.ids.length; i += BATCH_SIZE) {
@@ -170,9 +148,27 @@ async function sendDueDigest(owner: string, slot: string, now: Date) {
  * with a separate cron credential; it is NOT a browser-accessible server function.
  */
 export async function runBackgroundRadar(now = new Date()) {
+  // Broadcast only the confirmed owner’s single report; avoid duplicate posts
+  // if extra Auth accounts or preferences are ever added to the database.
+  const expectedId = process.env["SANAD_OWNER_USER_ID"]?.trim();
+  const expectedEmail = process.env["SANAD_OWNER_EMAIL"]?.trim().toLowerCase();
+  if (!expectedId && !expectedEmail) throw new Error("The radar owner must be configured");
+
+  const { data: usersPage, error: usersError } = await db.auth.admin.listUsers({
+    page: 1, perPage: 100,
+  });
+  if (usersError) throw new Error("Could not verify radar owner");
+  const owners = (usersPage?.users ?? []).filter((user: { id: string; email?: string }) =>
+    (!expectedId || user.id === expectedId) &&
+    (!expectedEmail || user.email?.trim().toLowerCase() === expectedEmail),
+  );
+  if (owners.length !== 1) throw new Error("Could not uniquely identify radar owner");
+
+  const ownerId: string = owners[0].id;
   const configs = await requireOk<Preference[]>(
     await db.from("radar_digest_preferences")
-      .select("user_id,enabled,sends_per_day,sources").eq("enabled", true).limit(20),
+      .select("user_id,enabled,sends_per_day,sources")
+      .eq("user_id", ownerId).eq("enabled", true).limit(1),
     "Read digest preferences",
   );
   const results: unknown[] = [];
