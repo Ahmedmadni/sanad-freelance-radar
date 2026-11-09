@@ -9,8 +9,6 @@ export interface Source {
 }
 
 export interface Settings {
-  botToken: string;
-  chatId: string;
   keywords: string[];
   alertsEnabled: boolean;
   minBudget: number;
@@ -30,8 +28,6 @@ export interface Settings {
 
 const KEY = "gig-radar-settings";
 export const DEFAULT_SETTINGS: Settings = {
-  botToken: "",
-  chatId: "",
   keywords: DEFAULT_KEYWORDS,
   alertsEnabled: true,
   minBudget: 0,
@@ -55,7 +51,14 @@ export function useSettings() {
     const load = () => {
       try {
         const raw = localStorage.getItem(KEY);
-        if (raw) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
+        if (raw) {
+          const saved = JSON.parse(raw) as Record<string, unknown>;
+          // Purge legacy bot credentials from browser storage on the first load.
+          delete saved['botToken'];
+          delete saved['chatId'];
+          localStorage.setItem(KEY, JSON.stringify(saved));
+          setSettings({ ...DEFAULT_SETTINGS, ...saved });
+        }
       } catch {}
     };
     load();
