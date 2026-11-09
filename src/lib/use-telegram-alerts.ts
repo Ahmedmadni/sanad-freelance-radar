@@ -38,7 +38,8 @@ export function useTelegramAlerts(settings: Settings) {
     (async () => {
       let ok = 0;
       for (const o of fresh) {
-        const budget = o.budgetMax > 0 ? `$${o.budgetMin}-${o.budgetMax}` : "غير محددة";
+        const currency = o.budgetCurrency === "SAR" ? "ريال" : o.budgetCurrency === "USD" ? "USD" : null;
+        const budget = o.budgetMax > 0 && currency ? `${o.budgetMin}-${o.budgetMax} ${currency}` : "غير محددة";
         const text =
           `🔔 <b>فرصة جديدة تطابق كلماتك</b>\n\n<b>${esc(o.title)}</b>\n` +
           `${esc(o.description.slice(0, 300))}\n\n` +
