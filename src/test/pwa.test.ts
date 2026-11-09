@@ -14,6 +14,7 @@ describe("PWA installation assets", () => {
   it("does not cache authenticated pages or API responses", () => {
     expect(worker).toContain('event.request.method !== "GET"');
     expect(worker).toContain("PUBLIC_ASSETS.includes(url.pathname)");
-    expect(worker).not.toMatch(/caches\.open\([^)]+\)\.then\([\s\S]*fetch\(event\.request\)/);
+    expect(worker).not.toContain("cache.put(event.request");
+    expect(worker).not.toContain("cache.add(event.request");
   });
 });
