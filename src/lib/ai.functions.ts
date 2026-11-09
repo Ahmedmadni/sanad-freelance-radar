@@ -74,7 +74,7 @@ export const sendTelegramTest = createServerFn({ method: "POST" })
     if (!botToken || !chatId) {
       throw new Error("أضف TELEGRAM_BOT_TOKEN و TELEGRAM_CHAT_ID في أسرار Lovable Cloud");
     }
-    if (!/^\\d+:[\\w-]{20,}$/.test(botToken) || !/^-?\\d+$/.test(chatId)) {
+    if (!/^\d+:[\w-]{20,}$/.test(botToken) || !/^-?\d+$/.test(chatId)) {
       throw new Error("إعدادات بوت تليجرام غير صالحة");
     }
     const res = await fetch("https://api.telegram.org/bot" + botToken + "/sendMessage", {
