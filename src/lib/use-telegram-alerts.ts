@@ -43,7 +43,7 @@ export function useTelegramAlerts(settings: Settings) {
         const text =
           `🔔 <b>فرصة جديدة تطابق كلماتك</b>\n\n<b>${esc(o.title)}</b>\n` +
           `${esc(o.description.slice(0, 300))}\n\n` +
-          `📍 المصدر: ${esc(o.sourceName ?? o.platform)}\n💰 الميزانية: ${budget}\n🕒 ${formatDate(o.publishedAt)}\n${o.url}`;
+          `📍 المصدر: ${esc(o.sourceName ?? o.platform)}\n💰 الميزانية: ${budget}\n🕒 ${formatDate(o.publishedAt)}\n${esc(o.url)}`;
         try {
           await send({ data: { text } });
           sent.add(alertKey(o));
