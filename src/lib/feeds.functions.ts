@@ -7,14 +7,57 @@ type In = { sources: { name: string; url: string; type: "RSS" | "Webhook" }[] };
 type Item = RawItem & { sourceName: string; location?: string; employment?: Employment };
 type Status = { name: string; url: string; ok: boolean; count: number; error: string | null; builtIn: boolean };
 
-function safeUrl(raw: string) {
+const blockedHost = (hostname: string) => {
+  const h = hostname.toLowerCase().replace(/\.$/, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return true;
+  if (h === "metadata.google.internal") return true;
+  if (h.startsWith("[") && h.endsWith("]")) return true; // Reject IPv6 literals (including mapped IPv4).
+  const parts = h.split(".");
+  if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
+    const octets = parts.map(Number);
+    const [a, b] = octets;
+    if (octets.some((n) => n > 255)) return true;
+    return a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 192 && b === 0) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      (a === 192 && b === 88) ||
+      (a === 198 && b === 51) ||
+      (a === 203 && b === 0);
+  }
+  // Reject obfuscated numeric IPv4 forms resolved by WHATWG URL to an IPv4 literal.
+  return false;
+};
+
+export function safeUrl(raw: string) {
   const u = new URL(raw);
   if (!/^https?:$/.test(u.protocol)) throw new Error("رابط غير مدعوم");
-  const h = u.hostname;
-  if (/^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.|\[?::1)/.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h)) {
-    throw new Error("لا يمكن الوصول لعناوين داخلية");
-  }
+  if (u.username || u.password || blockedHost(u.hostname)) throw new Error("لا يمكن الوصول لعناوين داخلية");
+  if (u.port && !["80", "443"].includes(u.port)) throw new Error("منفذ غير مسموح");
   return u.toString();
+}
+
+/** Check redirects individually. Final DNS/IP validation must additionally happen at the egress layer. */
+async function fetchSafeUrl(raw: string): Promise<Response> {
+  let url = safeUrl(raw);
+  for (let redirect = 0; redirect < 4; redirect++) {
+    const response = await fetch(url, {
+      redirect: "manual",
+      headers: { "User-Agent": "Mozilla/5.0 AccountingGigRadar/1.0", Accept: "application/rss+xml, application/atom+xml, application/json, text/xml, */*" },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) throw new Error("إعادة توجيه غير صالحة");
+      url = safeUrl(new URL(location, url).toString());
+      continue;
+    }
+    return response;
+  }
+  throw new Error("عدد كبير من عمليات إعادة التوجيه");
 }
 
 // ---- Haraj (Saudi classifieds) public search ----
@@ -269,15 +312,13 @@ const BUILT_IN_RSS: { name: string; url: string }[] = [
 ];
 
 async function fetchUrl(url: string, name: string, trusted: boolean): Promise<Item[]> {
-  const res = await fetch(safeUrl(url), {
-    headers: { "User-Agent": "Mozilla/5.0 AccountingGigRadar/1.0", Accept: "application/rss+xml, application/atom+xml, application/json, text/xml, */*" },
-  });
+  const res = await fetchSafeUrl(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const body = (await res.text()).slice(0, 2_000_000);
   const t = body.trimStart();
   const items = t.startsWith("{") || t.startsWith("[") ? parseJson(JSON.parse(t)) : parseFeed(body);
   return items
-    .filter((i) => i.title && i.link && (trusted || isAccounting(`${i.title} ${i.description}`)) && isSaudi(`${i.title} ${i.description} ${i.link}`))
+    .filter((i) => i.title && i.link && (trusted || isAccounting(`${i.title} ${i.description}`)) && isSaudi(`${i.title} ${i.description}`))
     .map((i) => ({ ...i, employment: name === "Freelancer" ? ("دوام جزئي" as Employment) : inferEmployment(`${i.title} ${i.description}`) }))
     .map((i) => ({ ...i, sourceName: name }));
 }
