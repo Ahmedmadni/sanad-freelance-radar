@@ -128,14 +128,14 @@ function SettingsPage() {
 
       <Card title="قناة سند العامة — الوجهة الأساسية" desc="كل من ينضم إلى القناة سيشاهد تقارير الفرص، دون الحاجة إلى تسجيل حساب في الموقع أو استقبال رسالة خاصة من البوت.">
         <p className="text-sm text-muted-foreground">
-          أنشئ قناة تليجرام، وأضف @Ahmedelmadni_bot مشرفاً بصلاحية نشر الرسائل.
-          بعدها احفظ مُعرّف القناة في أسرار Lovable Cloud باسم <code>TELEGRAM_CHANNEL_ID</code>؛
+          تأكد أن @Ahmedelmadni_bot مشرف في قناة Radar_4_Jobs بصلاحية نشر الرسائل.
+          وتأكد من حفظ مُعرّف القناة في أسرار Lovable Cloud باسم <code>TELEGRAM_CHANNEL_ID</code>؛
           يمكنك استخدام <code>@channel_username</code> لقناة عامة أو رقم قناة يبدأ بـ <code>-100</code>.
         </p>
         <div className="rounded-lg border bg-muted/40 p-3 text-sm">الوجهة العامة: <a href="https://t.me/Radar_4_Jobs" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary underline underline-offset-2" dir="ltr">@Radar_4_Jobs</a> — هذا هو مكان نشر التقارير المجمعة، وليس محادثتك الخاصة.</div>
         <Button disabled={channelBusy} onClick={() => void testChannel()}>
           {channelBusy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-          نشر رسالة اختبار في القناة
+          نشر رسالة اختبار إلى قناة @Radar_4_Jobs
         </Button>
         <p className="text-xs text-muted-foreground">
           رسائل الاختبار الخاصة ما زالت تذهب إلى حساب المالك عبر TELEGRAM_CHAT_ID.
