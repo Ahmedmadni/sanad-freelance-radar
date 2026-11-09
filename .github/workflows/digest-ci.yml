@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - "src/lib/digest.*"
+      - "src/lib/telegram-channel.*"
       - "src/routes/api/radar-cron.ts"
       - "src/routes/settings.tsx"
       - "src/lib/feeds.functions.ts"
@@ -29,6 +30,8 @@ jobs:
           bunx eslint
           src/lib/digest.logic.ts src/lib/digest.logic.test.ts
           src/lib/digest.runner.server.ts src/lib/digest.functions.ts
+          src/lib/telegram-channel.server.ts src/lib/telegram-channel.functions.ts
+          src/lib/telegram-channel.server.test.ts
           src/lib/feeds.functions.ts src/routes/api/radar-cron.ts
           src/routes/settings.tsx src/components/AppShell.tsx
           --rule "prettier/prettier: off"
