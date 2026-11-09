@@ -54,8 +54,8 @@ export function useSettings() {
         if (raw) {
           const saved = JSON.parse(raw) as Record<string, unknown>;
           // Purge legacy bot credentials from browser storage on the first load.
-          delete saved.botToken;
-          delete saved.chatId;
+          delete saved['botToken'];
+          delete saved['chatId'];
           localStorage.setItem(KEY, JSON.stringify(saved));
           setSettings({ ...DEFAULT_SETTINGS, ...saved });
         }
