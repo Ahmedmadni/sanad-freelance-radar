@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSettings, type Source } from "@/lib/settings";
 import { sendTelegramTest } from "@/lib/ai.functions";
+import { sendTelegramChannelTest } from "@/lib/telegram-channel.functions";
 import { getDigestConfig, saveDigestConfig } from "@/lib/digest.functions";
 import { matchesKeywords } from "@/lib/opportunities";
 import { useLiveSources } from "@/lib/use-live-sources";
@@ -43,6 +44,7 @@ function Card({ title, desc, children }: { title: string; desc?: string; childre
 function SettingsPage() {
   const [s, update] = useSettings();
   const send = useServerFn(sendTelegramTest);
+  const sendChannel = useServerFn(sendTelegramChannelTest);
   const live = useLiveSources(s.sources);
   const loadDigest = useServerFn(getDigestConfig);
   const saveDigest = useServerFn(saveDigestConfig);
@@ -87,6 +89,19 @@ function SettingsPage() {
 
   const [kw, setKw] = useState("");
   const [sending, setSending] = useState(false);
+  const [channelBusy, setChannelBusy] = useState(false);
+
+  async function testChannel() {
+    setChannelBusy(true);
+    try {
+      await sendChannel({ data: {} });
+      toast.success("تم نشر رسالة الاختبار في قناة سند");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "فشل اختبار قناة تليجرام");
+    } finally {
+      setChannelBusy(false);
+    }
+  }
   const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const [src, setSrc] = useState<Omit<Source, "id">>({ type: "RSS", name: "", url: "" });
 
@@ -111,7 +126,7 @@ function SettingsPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <h1 className="font-display text-3xl font-bold">التنبيهات والإعدادات</h1>
 
-      <Card title="بوت تليجرام" desc="تُحفظ بيانات الدخول إلى تليجرام في أسرار الخادم فقط. اضبط TELEGRAM_BOT_TOKEN و TELEGRAM_CHAT_ID في Lovable Cloud.">
+      <Card title="اختبارات البوت الخاصة" desc="هذا القسم لاختبار اتصال البوت مع حساب المالك فقط؛ لا يرسل هنا إلى متابعي القناة. تُحفظ البيانات في أسرار Cloud.">
         
         <div className="space-y-2"><Label>الحد الأدنى للميزانية ($)</Label><Input dir="ltr" type="number" value={s.minBudget} onChange={(e) => update({ minBudget: Number(e.target.value) || 0 })} /></div>
         <div className="flex flex-wrap gap-2">
@@ -121,7 +136,23 @@ function SettingsPage() {
         <p className="text-xs text-muted-foreground">هذا القسم لاختبار الاتصال وإرسال ملخص سريع يدوياً. التنبيهات الفورية لكل فرصة متوقفة؛ التقارير التلقائية المجمعة تُضبط في القسم التالي. توكن البوت محفوظ في أسرار الخادم.</p>
       </Card>
 
-      <Card title="التقرير التلقائي الشامل" desc="النظام يفحص مصادر الفرص كل ساعتين على الخادم حتى عند إغلاق الموقع، ويجمع جميع فرص المحاسبة الجديدة في تقرير يومي كامل.">
+      <Card title="قناة سند العامة" desc="كل من ينضم إلى القناة سيشاهد تقارير الفرص، دون الحاجة إلى تسجيل حساب في الموقع أو استقبال رسالة خاصة من البوت.">
+        <p className="text-sm text-muted-foreground">
+          أنشئ قناة تليجرام، وأضف @Ahmedelmadni_bot مشرفاً بصلاحية نشر الرسائل.
+          بعدها احفظ مُعرّف القناة في أسرار Lovable Cloud باسم <code>TELEGRAM_CHANNEL_ID</code>؛
+          يمكنك استخدام <code>@channel_username</code> لقناة عامة أو رقم قناة يبدأ بـ <code>-100</code>.
+        </p>
+        <Button variant="outline" disabled={channelBusy} onClick={() => void testChannel()}>
+          {channelBusy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+          نشر رسالة اختبار في القناة
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          رسائل الاختبار الخاصة ما زالت تذهب إلى حساب المالك عبر TELEGRAM_CHAT_ID.
+          أما التقارير المجدولة فتُنشر للقناة عبر TELEGRAM_CHANNEL_ID فقط، ولن تُرسل تلقائياً إلى المحادثات الخاصة.
+        </p>
+      </Card>
+
+      <Card title="التقرير التلقائي للقناة العامة" desc="بعد تفعيل مجدول الخادم يبحث سند كل ساعتين حتى لو كان الموقع مغلقاً، وينشر الفرص الجديدة في قناة تليجرام العامة.">
         <div className="flex items-center justify-between">
           <Label>تفعيل التقرير التلقائي</Label>
           <Switch checked={digestEnabled} onCheckedChange={setDigestEnabled} />
@@ -141,7 +172,7 @@ function SettingsPage() {
           حفظ جدول الإرسال ومزامنة مصادر البحث
         </Button>
         <p className="text-xs text-muted-foreground">
-          التقرير يشمل جميع الفرص الجديدة التي اكتشفها الرادار منذ آخر تقرير، وليس أول خمس فرص فقط.
+          تُنشر جميع الفرص الجديدة المكتشفة منذ آخر تقرير في القناة العامة، وليس أول خمس فرص فقط.
           وإذا تجاوزت القائمة الحد المسموح به لرسالة تليجرام تُرسل على عدة أجزاء ضمن التقرير نفسه.
           يحتاج التشغيل المستقل إلى تفعيل مهمة GitHub Actions المجدولة وربط أسرارها بالخادم.
         </p>
