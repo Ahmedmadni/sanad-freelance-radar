@@ -178,7 +178,8 @@ export const alertKey = (o: { url: string; title: string }) => (o.url ? normLink
 export function pickAlerts(items: Opportunity[], keywords: string[], minBudget: number, sent: Set<string>) {
   return items.filter((o) => {
     if (sent.has(alertKey(o))) return false;
-    if (minBudget > 0 && o.budgetMax > 0 && o.budgetMax < minBudget) return false;
+    if (minBudget > 0 && o.budgetMax > 0 && o.budgetCurrency === "USD" && o.budgetMax < minBudget) return false;
+    if (minBudget > 0 && o.budgetMax > 0 && o.budgetCurrency !== "USD") return false;
     const text = `${o.title} ${o.description}`.toLowerCase();
     return keywords.some((k) => text.includes(k.toLowerCase()) || k.split(" ").some((w) => w.length > 2 && text.includes(w.toLowerCase())));
   });
