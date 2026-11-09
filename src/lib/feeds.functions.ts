@@ -43,6 +43,28 @@ export function safeUrl(raw: string) {
 }
 
 /** Check redirects individually. Final DNS/IP validation must additionally happen at the egress layer. */
+async function readResponseLimited(response: Response, maxBytes = 2_000_000): Promise<string> {
+  if (Number(response.headers.get("content-length") ?? "0") > maxBytes) throw new Error("استجابة المصدر أكبر من الحد المسموح");
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) throw new Error("استجابة المصدر أكبر من الحد المسموح");
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
+
 async function fetchSafeUrl(raw: string): Promise<Response> {
   let url = safeUrl(raw);
   for (let redirect = 0; redirect < 4; redirect++) {
@@ -184,7 +206,7 @@ async function fetchKafiil(): Promise<Item[]> {
           publishedAt: arRelative(when),
           sourceName: "كفيل",
           location: "كفيل",
-          employment: "دوام جزئي",
+          employment: "عمل حر",
         });
       }
     }),
@@ -213,7 +235,7 @@ async function fetchLinkedIn(): Promise<Item[]> {
           sourceName: "لينكدإن",
           location: `${j.company} · ${j.location}`,
           // LinkedIn listings are salaried positions unless the title says otherwise.
-          employment: /part[- ]?time|دوام جزئي|freelance|contract|temporary|مؤقت/i.test(j.title) ? "دوام جزئي" : "دوام كامل",
+          employment: inferEmployment(j.title),
         });
       }
     }),
@@ -316,12 +338,12 @@ const BUILT_IN_RSS: { name: string; url: string }[] = [
 async function fetchUrl(url: string, name: string, trusted: boolean): Promise<Item[]> {
   const res = await fetchSafeUrl(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const body = (await res.text()).slice(0, 2_000_000);
+  const body = await readResponseLimited(res);
   const t = body.trimStart();
   const items = t.startsWith("{") || t.startsWith("[") ? parseJson(JSON.parse(t)) : parseFeed(body);
   return items
     .filter((i) => i.title && i.link && (trusted || isAccounting(`${i.title} ${i.description}`)) && isSaudi(`${i.title} ${i.description}`))
-    .map((i) => ({ ...i, employment: name === "Freelancer" ? ("دوام جزئي" as Employment) : inferEmployment(`${i.title} ${i.description}`) }))
+    .map((i) => ({ ...i, employment: name === "Freelancer" ? ("عمل حر" as Employment) : inferEmployment(`${i.title} ${i.description}`) }))
     .map((i) => ({ ...i, sourceName: name }));
 }
 
