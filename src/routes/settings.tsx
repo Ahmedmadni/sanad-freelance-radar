@@ -74,7 +74,7 @@ function SettingsPage() {
         <div className="space-y-2"><Label>الحد الأدنى للميزانية ($)</Label><Input dir="ltr" type="number" value={s.minBudget} onChange={(e) => update({ minBudget: Number(e.target.value) || 0 })} /></div>
         <div className="flex flex-wrap gap-2">
           <Button disabled={sending} onClick={() => test(false)}>{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}رسالة تجريبية</Button>
-          <Button variant="outline" disabled={sending || !s.botToken || !s.chatId} onClick={() => test(true)}>إرسال ملخص الفرص المطابقة</Button>
+          <Button variant="outline" disabled={sending} onClick={() => test(true)}>إرسال ملخص الفرص المطابقة</Button>
         </div>
         <p className="text-xs text-muted-foreground">عند تفعيل التنبيهات، تصلك رسالة تلقائية لكل فرصة جديدة من مصادرك تطابق كلماتك المفتاحية (تُفحص المصادر كل 5 دقائق أثناء فتح التطبيق). الفرص الموجودة عند أول تشغيل لا تُرسل. إعدادات البحث محفوظة في المتصفح، أما توكن تليجرام ومعرف الدردشة فيُحفظان في أسرار الخادم فقط.</p>
       </Card>
