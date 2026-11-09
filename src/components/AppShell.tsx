@@ -3,14 +3,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Moon, Sun, Radar, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { useSettings } from "@/lib/settings";
-import { useTelegramAlerts } from "@/lib/use-telegram-alerts";
-
-function AlertsWatcher() {
-  const [settings] = useSettings();
-  useTelegramAlerts(settings);
-  return null;
-}
 
 const nav = [
   { to: "/", label: "لوحة التحكم" },
@@ -33,7 +25,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
   return (
     <div className="min-h-screen bg-background" dir="rtl">
-      <AlertsWatcher />
       <header className="sticky top-0 z-20 border-b bg-background/85 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-3">
           <Link to="/" className="flex items-center gap-2">

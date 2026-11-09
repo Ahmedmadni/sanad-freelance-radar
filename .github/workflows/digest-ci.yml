@@ -1,0 +1,40 @@
+name: Scheduled digest verification
+on:
+  pull_request:
+    paths:
+      - "src/lib/digest.*"
+      - "src/lib/telegram-channel.*"
+      - "src/routes/api/radar-cron.ts"
+      - "src/routes/settings.tsx"
+      - "src/lib/feeds.functions.ts"
+      - "supabase/migrations/**"
+      - ".github/workflows/radar-background.yml"
+      - ".github/workflows/digest-ci.yml"
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.2"
+      - run: bun install --frozen-lockfile
+      - run: bun run test
+      - run: bunx tsc --noEmit
+      - run: bun run build
+      - name: Changed modules lint
+        run: >
+          bunx eslint
+          src/lib/digest.logic.ts src/lib/digest.logic.test.ts
+          src/lib/digest.runner.server.ts src/lib/digest.functions.ts
+          src/lib/telegram-channel.server.ts src/lib/telegram-channel.functions.ts
+          src/lib/telegram-channel.server.test.ts
+          src/lib/feeds.functions.ts src/routes/api/radar-cron.ts
+          src/routes/settings.tsx src/components/AppShell.tsx
+          --rule "prettier/prettier: off"
+          --rule "@typescript-eslint/no-explicit-any: warn"
+          --rule "no-empty: warn"
+          --rule "no-useless-escape: warn"
