@@ -16,7 +16,8 @@ const blockedHost = (hostname: string) => {
   const parts = h.split(".");
   if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
     const octets = parts.map(Number);
-    const [a, b] = octets;
+    const a = octets[0] ?? 0;
+    const b = octets[1] ?? 0;
     if (octets.some((n) => n > 255)) return true;
     return a === 0 || a === 10 || a === 127 || a >= 224 ||
       (a === 100 && b >= 64 && b <= 127) ||
