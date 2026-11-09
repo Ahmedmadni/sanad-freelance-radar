@@ -136,7 +136,7 @@ export function parseBudget(text: string): { min: number; max: number; currency:
     values.push({ amount, currency: /^(sar|ريال)/.test(unit) ? "SAR" : "USD" });
   }
   if (!values.length) return { min: 0, max: 0, currency: null };
-  const currency = values[0].currency;
+  const currency = values[0]?.currency ?? null;
   if (values.some((v) => v.currency !== currency)) return { min: 0, max: 0, currency: null };
   return { min: Math.min(...values.map((v) => v.amount)), max: Math.max(...values.map((v) => v.amount)), currency };
 }
