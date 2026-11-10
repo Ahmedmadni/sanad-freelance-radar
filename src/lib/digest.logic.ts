@@ -44,6 +44,7 @@ function tidy(value: string | undefined | null): string {
 }
 
 function clip(value: string, limit: number): string {
+  if (limit <= 0) return "";
   const chars = Array.from(tidy(value));
   return chars.length > limit ? chars.slice(0, Math.max(0, limit - 1)).join("") + "…" : chars.join("");
 }
