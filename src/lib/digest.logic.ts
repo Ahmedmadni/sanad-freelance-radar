@@ -77,8 +77,8 @@ function entryLine(
   const title = escapeTelegramHtml(clip(item.title || "فرصة عمل", titleLength));
   const source = escapeTelegramHtml(clip(item.platform || "مصدر غير محدد", 50));
   const mode = [item.employment, item.workMode]
-    .filter((v): v is string => Boolean(v && v !== "غير محدد"))
-    .map((v) => escapeTelegramHtml(clip(v, 36))).join(" · ");
+    .filter((v) => Boolean(v && v !== "غير محدد"))
+    .map((v) => escapeTelegramHtml(clip(String(v), 36))).join(" · ");
   const currency = item.budgetCurrency === "SAR" ? "ريال" :
     item.budgetCurrency === "USD" ? "دولار" : "";
   const budget = currency && item.budgetMax > 0
