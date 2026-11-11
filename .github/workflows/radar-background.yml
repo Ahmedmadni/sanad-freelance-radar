@@ -56,12 +56,12 @@ jobs:
           if ! jq -e '
             (.owner_count | type == "number") and (.owner_count > 0) and
             (.results | type == "array") and (.results | length > 0) and
-            all(.results[]; .status == "scanned" or .status == "sent" or .status == "already-handled")
+            all(.results[]; .status == "sent" or .status == "already-handled" or .status == "in-progress" or .status == "outside-window")
           ' "$response_file" > /dev/null; then
-            echo "::error::Scan returned no owner, no results, or an invalid status."
+            echo "::error::Scheduled radar returned no owner, no results, or an invalid report status."
             exit 1
           fi
 
           jq '{timestamp, owner_count, results}' "$response_file"
           echo "### Sanad twice-daily radar" >> "$GITHUB_STEP_SUMMARY"
-          jq -r '.results[] | "- " + .status + " | discovered: " + (.discovered | tostring) + " | sources OK: " + (.sources_ok | tostring) + " | failed: " + (.sources_failed | tostring)' "$response_file" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.results[] | "- " + .status + " | feeds skipped: " + (.skipped_collection | tostring) + " | discovered: " + (.discovered | tostring) + " | sources OK: " + (.sources_ok | tostring) + " | failed: " + (.sources_failed | tostring)' "$response_file" >> "$GITHUB_STEP_SUMMARY"
