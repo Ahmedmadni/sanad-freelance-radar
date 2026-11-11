@@ -2,13 +2,13 @@
 
 ## User-facing behavior
 
-- **Default:** one combined report per day, target **08:00 Asia/Riyadh**.
-- **Optional:** two reports per day, target **08:00 and 20:00 Asia/Riyadh**.
-- **Collection:** GitHub Actions triggers an owner-independent **server-side scan every two hours**. The app/browser may be closed.
+- **Configurable:** one report daily (morning) or two reports daily (morning + evening). The owner currently uses two reports.
+- **Primary scans:** approximately **08:07 and 20:07 Asia/Riyadh**. Each scan is followed immediately by the corresponding report, with no deliberate two-hour gap.
+- **Low-cost fallback:** at **09:07 and 21:07 Asia/Riyadh**, GitHub calls the endpoint again, but the server checks the persistent slot status **before** fetching any sources. A successfully sent report means no second source scan. Only a missed/failed report triggers another scan.
 - **Contents:** every new accounting opportunity found and not already included in a successful report, including its title, platform, optional budget, short description, work mode when available, and application link.
 - **Public Telegram channel:** digests are posted to a channel and visible to all members. If lengthy, the report is split into numbered posts rather than truncating to the first five jobs. Private Telegram messages remain for owner testing only.
 - **When no jobs are found:** one short report says no new opportunities. Previous opportunities are not resent.
-- **Delayed runs:** GitHub cron jobs may start late. The next scan can retry a missing digest in that day's time slot.
+- **Delayed runs:** GitHub Actions cron is best-effort and may arrive late or be skipped. The 09:07/21:07 attempts are reliability backups, not strict delivery guarantees.
 - **Sources:** built-in sources are always searched, plus optional custom sources synchronized by pressing Save on the app Settings page. Blocked sources are not fabricated and may limit completeness.
 
 ## Production state and prerequisites
@@ -16,7 +16,7 @@
 PostgreSQL tables have already been added to the Lovable Cloud database using:
 `supabase/migrations/20261109070000_radar_daily_digest.sql`.
 
-The owner's initial settings are **enabled = true**, **sends_per_day = 1**. This alone does **not** start background operation; the scheduler requires a deployed version and two repository secrets.
+The owner's production settings are **enabled = true**, **sends_per_day = 2** as last verified. Background operation requires a published endpoint and two GitHub repository secrets.
 
 ### 1. Configure one shared scheduler secret, never place it in chat or source code
 
@@ -50,13 +50,13 @@ Create a public Telegram channel, add `@Ahmedelmadni_bot` as an administrator wi
 
 From owner Settings click **نشر رسالة اختبار في القناة**, then verify the test post appears in the channel before enabling the schedule. No Telegram secrets are copied into GitHub Actions.
 
-Open **Actions → Sanad background job discovery + daily digest → Run workflow** for a single test. The action should return JSON containing `owner_count:1`, source success counts, and either `scanned`, `sent`, or `already-handled`. A manual trigger outside the 08:00/20:00 Riyadh digest slots only scans and archives opportunities; it does not necessarily send immediately.
+Open **Actions → Sanad background job discovery + daily digest → Run workflow** for a test. A run in the report window should return `owner_count:1` and `status:sent`, `already-handled` or `in-progress`. A manual trigger outside a report window returns `outside-window` without searching sources, to save Cloud usage.
 
 Check **Settings → التقرير التلقائي الشامل** in the app after logging in; choose 1 or 2 reports and press **Save**. This also copies your custom RSS/JSON source list to Cloud for offline scanning.
 
 ### 4. Monitor cost, security and reliability
 
-- Every two hours = **12 background scans per day**. Some sources require multiple HTTP requests; monitor Lovable Cloud compute and external traffic limits.
+- **Normal operation: two complete source scans per day**, plus two cheap backup invocations that check the report database record but **do not crawl sources** after successful delivery. If a primary run is missed or fails, a backup may perform a replacement scan. This reduces Cloud source-fetch usage significantly; continue to monitor actual usage.
 - GitHub scheduled jobs may be delayed or occasionally skipped. Their schedule is a target, not an exact-time SLA.
 - All three radar tables have Supabase RLS enabled. The browsing owner can read their data; server jobs use a Cloud-only service-role key.
 - The cron shared secret and bot token must never be logged or delivered to the client.
@@ -72,5 +72,5 @@ Check **Settings → التقرير التلقائي الشامل** in the app a
 4. Owner authentication still works.
 5. No immediate Telegram messages from opening the dashboard.
 6. Cloud settings show the correct report frequency and pending count.
-7. A manual schedule trigger discovers opportunities without browser interaction.
+7. A manual trigger during the eligible report window discovers opportunities and sends a report without browser interaction; outside the window it makes no source requests.
 8. At the next digest slot, all pending opportunities are posted in part-numbered Telegram channel messages; repeats do not resend them.

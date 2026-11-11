@@ -3,20 +3,24 @@ name: Sanad background job discovery + daily digest
 on:
   workflow_dispatch:
   schedule:
-    # GitHub Actions schedules are best-effort and can be delayed/skipped.
-    # All cron expressions are UTC; Riyadh time is UTC+3 all year.
-    # 08:07/08:27/08:47 then 09:07/09:27/09:47 Riyadh: morning + fallback.
-    - cron: "7,27,47 5,6 * * *"
-    # 20:07/20:27/20:47 then 21:07/21:27/21:47 Riyadh: evening + fallback.
-    - cron: "7,27,47 17,18 * * *"
-    # Other source scans approximately every two hours. 08/20h are covered above.
-    - cron: "17 1,3,7,9,11,13,15,19,21,23 * * *"
+    # UTC = Riyadh time - 3 hours (year-round).
+    # Primary morning scan + immediate digest: 08:07 Riyadh.
+    - cron: "7 5 * * *"
+    # Fallback only if the morning report wasn't sent: 09:07 Riyadh.
+    - cron: "7 6 * * *"
+    # Primary evening scan + immediate digest: 20:07 Riyadh.
+    - cron: "7 17 * * *"
+    # Fallback only if the evening report wasn't sent: 21:07 Riyadh.
+    - cron: "7 18 * * *"
+    # GitHub's cron trigger is best-effort, not a minute-accurate SLA.
+    # Server checks completed digest slots BEFORE collecting sources:
+    # successful reports make the 09:07/21:07 calls cheap no-op checks.
 
 permissions:
   contents: read
 
-# For overlapping delayed runs, serialize rather than cancel: the database
-# deduplicates individual opportunities and claims each morning/evening slot.
+# Serialize delayed overlapping GitHub runs. The database prevents duplicate
+# reports and already-sent slots skip expensive feed collection.
 concurrency:
   group: sanad-background-radar
   cancel-in-progress: false
@@ -52,12 +56,12 @@ jobs:
           if ! jq -e '
             (.owner_count | type == "number") and (.owner_count > 0) and
             (.results | type == "array") and (.results | length > 0) and
-            all(.results[]; .status == "scanned" or .status == "sent" or .status == "already-handled")
+            all(.results[]; .status == "sent" or .status == "already-handled" or .status == "in-progress" or .status == "outside-window")
           ' "$response_file" > /dev/null; then
-            echo "::error::Scan returned no owner, no results, or an invalid status."
+            echo "::error::Scheduled radar returned no owner, no results, or an invalid report status."
             exit 1
           fi
 
           jq '{timestamp, owner_count, results}' "$response_file"
-          echo "### Radar check" >> "$GITHUB_STEP_SUMMARY"
-          jq -r '.results[] | "- " + .status + " | new seen: " + (.discovered | tostring) + " | sources OK: " + (.sources_ok | tostring) + " | failed: " + (.sources_failed | tostring)' "$response_file" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Sanad twice-daily radar" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.results[] | "- " + .status + " | feeds skipped: " + (.skipped_collection | tostring) + " | discovered: " + (.discovered | tostring) + " | sources OK: " + (.sources_ok | tostring) + " | failed: " + (.sources_failed | tostring)' "$response_file" >> "$GITHUB_STEP_SUMMARY"

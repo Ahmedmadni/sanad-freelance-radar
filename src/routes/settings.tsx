@@ -130,7 +130,7 @@ function SettingsPage() {
         <p className="text-sm text-muted-foreground">تحكم في تقارير القناة وتثبيت سند على هاتفك. الخيارات الإضافية تجدها بالأسفل.</p>
       </div>
       <PwaInstall />
-            <Card title="التقرير التلقائي للقناة العامة" desc="بعد تفعيل مجدول الخادم يبحث سند كل ساعتين حتى لو كان الموقع مغلقاً، وينشر الفرص الجديدة في قناة تليجرام العامة.">
+            <Card title="التقرير التلقائي للقناة العامة" desc="يفحص سند الفرص الساعة 8:07 صباحاً و8:07 مساءً، ويرسل التقرير بعد الفحص مباشرة. 9:07 موعد احتياطي عند عدم الإرسال، حتى لو أغلقت الموقع.">
         <div className="flex items-center justify-between">
           <Label>تفعيل التقرير التلقائي</Label>
           <Switch checked={digestEnabled} onCheckedChange={setDigestEnabled} />
@@ -140,8 +140,8 @@ function SettingsPage() {
           <Select value={String(digestFrequency)} onValueChange={(value) => setDigestFrequency(value === "2" ? 2 : 1)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="1">مرة يومياً — الساعة 8 صباحاً</SelectItem>
-              <SelectItem value="2">مرتان يومياً — 8 صباحاً و8 مساءً</SelectItem>
+              <SelectItem value="1">مرة يومياً — حوالي 8:07 صباحاً</SelectItem>
+              <SelectItem value="2">مرتان يومياً — 8:07 صباحاً و8:07 مساءً</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -152,7 +152,7 @@ function SettingsPage() {
         <p className="text-xs text-muted-foreground">
           تُنشر جميع الفرص الجديدة المكتشفة منذ آخر تقرير في القناة العامة، وليس أول خمس فرص فقط.
           وإذا تجاوزت القائمة الحد المسموح به لرسالة تليجرام تُرسل على عدة أجزاء ضمن التقرير نفسه.
-          يحتاج التشغيل المستقل إلى تفعيل مهمة GitHub Actions المجدولة وربط أسرارها بالخادم.
+          يحاول النظام مرة أخرى حوالي 9:07 صباحاً أو مساءً فقط لو لم ينجح التقرير. عند الإرسال بنجاح لا يعيد فحص المصادر. مواعيد GitHub تقريبية وليست مضمونة بالدقيقة.
         </p>
         {digestInfo && (
           <div className="space-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
