@@ -23,12 +23,32 @@ export function riyadhClock(now: Date) {
   };
 }
 
-/** A missed 08:00/20:00 run is retried at the next hourly scan. */
+/**
+ * The scheduled GitHub job fires around 08:07/20:07 Riyadh with a 09:07/21:07
+ * fallback. A late GitHub invocation can still complete its missing slot.
+ */
 export function dueDigestSlot(now: Date, frequency: RadarFrequency): string | null {
   const { day, hour } = riyadhClock(now);
   if (hour < 8) return null;
-  if (frequency === 2 && hour >= 20) return day + "-evening";
+  if (hour >= 20) return frequency === 2 ? day + "-evening" : null;
   return day + "-morning";
+}
+
+/**
+ * Check the database checkpoint before expensive source collection.
+ * A sent report needs no more scanning; a currently sending report must not
+ * race another Telegram publication. Stale/failed runs can be retried.
+ */
+export function digestSlotGate(
+  existing: { status: string; started_at: string | null } | null,
+  now: Date,
+): "already-handled" | "in-progress" | null {
+  if (existing?.status === "sent") return "already-handled";
+  if (existing?.status !== "sending" || !existing.started_at) return null;
+  const elapsed = now.getTime() - new Date(existing.started_at).getTime();
+  return Number.isFinite(elapsed) && elapsed >= -60_000 && elapsed < 30 * 60_000
+    ? "in-progress"
+    : null;
 }
 
 
