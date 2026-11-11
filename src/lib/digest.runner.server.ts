@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { collectAllSources } from "./feeds.functions";
 import { postTelegramChannel } from "./telegram-channel.server";
-import { dueDigestSlot, formatDigestParts, type RadarFrequency } from "./digest.logic";
+import { dueDigestSlot, digestSlotGate, formatDigestParts, type RadarFrequency } from "./digest.logic";
 import type { Source } from "./settings";
 import type { Opportunity } from "./opportunities";
 
@@ -74,10 +74,8 @@ async function claimSlot(owner: string, slot: string, now: Date): Promise<boolea
     .select("status,started_at")
     .eq("user_id", owner).eq("slot_key", slot).maybeSingle();
   if (error) throw new Error("Read digest state: " + error.message);
-  if (existing?.status === "sent") return false;
-  // Another worker is sending. Recover only after a 30-minute stale window.
-  if (existing?.status === "sending" &&
-      now.getTime() - new Date(existing.started_at).getTime() < 30 * 60_000) return false;
+  // Preserve both sent and active-slot protection even if the preflight check raced.
+  if (digestSlotGate(existing, now)) return false;
 
   if (existing) {
     const { error: updateError } = await db.from("radar_digest_runs")
@@ -144,7 +142,7 @@ async function sendDueDigest(owner: string, slot: string, now: Date) {
 }
 
 /**
- * Server-side hourly scan. GitHub Actions (or an approved cloud cron) invokes it
+ * Twice-daily server-side scan with conditional backup. GitHub Actions invokes it
  * with a separate cron credential; it is NOT a browser-accessible server function.
  */
 export async function runBackgroundRadar(now = new Date()) {
@@ -173,6 +171,32 @@ export async function runBackgroundRadar(now = new Date()) {
   );
   const results: unknown[] = [];
   for (const config of configs ?? []) {
+    const slot = dueDigestSlot(now, config.sends_per_day);
+    if (!slot) {
+      // Manual invocation outside both reporting windows does not consume Cloud
+      // compute by crawling the sources.
+      results.push({
+        status: "outside-window", discovered: 0,
+        sources_ok: 0, sources_failed: 0, skipped_collection: true,
+      });
+      continue;
+    }
+
+    // IMPORTANT: the 09:07/21:07 backup is a cheap database check after the
+    // primary scan succeeds. Do not crawl external sites again if already sent.
+    const { data: previousRun, error: slotError } = await db.from("radar_digest_runs")
+      .select("status,started_at")
+      .eq("user_id", config.user_id).eq("slot_key", slot).maybeSingle();
+    if (slotError) throw new Error("Check scheduled report before scanning: " + slotError.message);
+    const gate = digestSlotGate(previousRun, now);
+    if (gate) {
+      results.push({
+        status: gate, slot, discovered: 0,
+        sources_ok: 0, sources_failed: 0, skipped_collection: true,
+      });
+      continue;
+    }
+
     const sources = Array.isArray(config.sources) ? config.sources : [];
     const sanitizedSources = sources.slice(0, 20).filter(
       (s): s is Source => typeof s?.url === "string" && /^https?:\/\//.test(s.url) &&
@@ -193,14 +217,14 @@ export async function runBackgroundRadar(now = new Date()) {
         "Store discovered opportunities",
       );
     }
-    const slot = dueDigestSlot(now, config.sends_per_day);
-    const summary = slot ? await sendDueDigest(config.user_id, slot, now) : { status: "scanned" };
+    const summary = await sendDueDigest(config.user_id, slot, now);
     results.push({
       status: summary.status,
       discovered: opportunities.length,
       sources_ok: collection.statuses.filter((s) => s.ok).length,
       sources_failed: collection.statuses.filter((s) => !s.ok).length,
-      ...(slot ? { slot } : {}),
+      slot,
+      skipped_collection: false,
     });
   }
   return { timestamp: now.toISOString(), owner_count: configs?.length ?? 0, results };
