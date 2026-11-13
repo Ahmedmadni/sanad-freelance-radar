@@ -14,7 +14,120 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      radar_digest_preferences: {
+        Row: {
+          enabled: boolean
+          sends_per_day: number
+          sources: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          enabled?: boolean
+          sends_per_day?: number
+          sources?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          enabled?: boolean
+          sends_per_day?: number
+          sources?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      radar_digest_runs: {
+        Row: {
+          error: string | null
+          finished_at: string | null
+          id: string
+          message_count: number
+          opportunity_count: number
+          slot_key: string
+          started_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          message_count?: number
+          opportunity_count?: number
+          slot_key: string
+          started_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          message_count?: number
+          opportunity_count?: number
+          slot_key?: string
+          started_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      radar_found_opportunities: {
+        Row: {
+          budget_max: number
+          budget_min: number
+          currency: string | null
+          description: string
+          employment: string | null
+          first_seen: string
+          last_seen: string
+          notified_at: string | null
+          opportunity_id: string
+          published_at: string | null
+          source: string
+          title: string
+          url: string
+          user_id: string
+          work_mode: string | null
+        }
+        Insert: {
+          budget_max?: number
+          budget_min?: number
+          currency?: string | null
+          description?: string
+          employment?: string | null
+          first_seen?: string
+          last_seen?: string
+          notified_at?: string | null
+          opportunity_id: string
+          published_at?: string | null
+          source: string
+          title: string
+          url: string
+          user_id: string
+          work_mode?: string | null
+        }
+        Update: {
+          budget_max?: number
+          budget_min?: number
+          currency?: string | null
+          description?: string
+          employment?: string | null
+          first_seen?: string
+          last_seen?: string
+          notified_at?: string | null
+          opportunity_id?: string
+          published_at?: string | null
+          source?: string
+          title?: string
+          url?: string
+          user_id?: string
+          work_mode?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
