@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { collectAllSources } from "./feeds.functions";
 import { postTelegramChannel } from "./telegram-channel.server";
-import { dueDigestSlot, digestSlotGate, formatDigestParts, type RadarFrequency } from "./digest.logic";
+import { recoverableDigestSlots, riyadhClock, digestSlotGate, formatDigestParts, type RadarFrequency } from "./digest.logic";
 import type { Source } from "./settings";
 import type { Opportunity } from "./opportunities";
 
@@ -142,7 +142,7 @@ async function sendDueDigest(owner: string, slot: string, now: Date) {
 }
 
 /**
- * Twice-daily server-side scan with conditional backup. GitHub Actions invokes it
+ * Recoverable twice-daily server-side scan. GitHub Actions invokes it
  * with a separate cron credential; it is NOT a browser-accessible server function.
  */
 export async function runBackgroundRadar(now = new Date()) {
@@ -171,28 +171,23 @@ export async function runBackgroundRadar(now = new Date()) {
   );
   const results: unknown[] = [];
   for (const config of configs ?? []) {
-    const slot = dueDigestSlot(now, config.sends_per_day);
-    if (!slot) {
-      // Manual invocation outside both reporting windows does not consume Cloud
-      // compute by crawling the sources.
+    // Find missed slots across the previous day as well as today's due slots.
+    // A scheduler run at e.g. 02:00 Riyadh can now recover yesterday evening.
+    const candidates = recoverableDigestSlots(now, config.sends_per_day);
+    const { data: checkpoints, error: slotError } = await db.from("radar_digest_runs")
+      .select("slot_key,status,started_at")
+      .eq("user_id", config.user_id).in("slot_key", candidates);
+    if (slotError) throw new Error("Check scheduled reports before scanning: " + slotError.message);
+    const checkpointsBySlot = new Map<string, { status: string; started_at: string | null }>(
+      (checkpoints ?? []).map((row: { slot_key: string; status: string; started_at: string | null }) =>
+        [row.slot_key, row]),
+    );
+    const missing = candidates.filter((slot) => !digestSlotGate(checkpointsBySlot.get(slot) ?? null, now));
+    if (!missing.length) {
       results.push({
-        status: "outside-window", discovered: 0,
+        status: "already-handled", discovered: 0,
         sources_ok: 0, sources_failed: 0, skipped_collection: true,
-      });
-      continue;
-    }
-
-    // IMPORTANT: the 09:07/21:07 backup is a cheap database check after the
-    // primary scan succeeds. Do not crawl external sites again if already sent.
-    const { data: previousRun, error: slotError } = await db.from("radar_digest_runs")
-      .select("status,started_at")
-      .eq("user_id", config.user_id).eq("slot_key", slot).maybeSingle();
-    if (slotError) throw new Error("Check scheduled report before scanning: " + slotError.message);
-    const gate = digestSlotGate(previousRun, now);
-    if (gate) {
-      results.push({
-        status: gate, slot, discovered: 0,
-        sources_ok: 0, sources_failed: 0, skipped_collection: true,
+        checked_slots: candidates.length,
       });
       continue;
     }
@@ -217,15 +212,20 @@ export async function runBackgroundRadar(now = new Date()) {
         "Store discovered opportunities",
       );
     }
-    const summary = await sendDueDigest(config.user_id, slot, now);
-    results.push({
-      status: summary.status,
-      discovered: opportunities.length,
-      sources_ok: collection.statuses.filter((s) => s.ok).length,
-      sources_failed: collection.statuses.filter((s) => !s.ok).length,
-      slot,
-      skipped_collection: false,
-    });
+    // Collect once, then deliver every outstanding period. On recovery runs,
+    // earlier missed slots are published before the current period.
+    for (const slot of missing) {
+      const summary = await sendDueDigest(config.user_id, slot, now);
+      results.push({
+        status: summary.status,
+        discovered: opportunities.length,
+        sources_ok: collection.statuses.filter((s) => s.ok).length,
+        sources_failed: collection.statuses.filter((s) => !s.ok).length,
+        slot,
+        recovery: slot.slice(0, 10) !== riyadhClock(now).day,
+        skipped_collection: false,
+      });
+    }
   }
   return { timestamp: now.toISOString(), owner_count: configs?.length ?? 0, results };
 }

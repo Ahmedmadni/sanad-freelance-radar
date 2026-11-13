@@ -35,6 +35,25 @@ export function dueDigestSlot(now: Date, frequency: RadarFrequency): string | nu
 }
 
 /**
+ * GitHub scheduled jobs are best-effort and can be delayed or skipped.
+ * Recover all unconfirmed report slots from yesterday and today. This lets
+ * an early-morning job deliver yesterday's missing evening report, rather
+ * than silently treating the run as "outside-window".
+ * Slots are oldest-first so jobs collected since the last report aren't lost.
+ */
+export function recoverableDigestSlots(now: Date, frequency: RadarFrequency): string[] {
+  const { day, hour } = riyadhClock(now);
+  const previous = new Date(day + "T12:00:00Z");
+  previous.setUTCDate(previous.getUTCDate() - 1);
+  const yesterday = previous.toISOString().slice(0, 10);
+  const slots = [yesterday + "-morning"];
+  if (frequency === 2) slots.push(yesterday + "-evening");
+  if (hour >= 8) slots.push(day + "-morning");
+  if (frequency === 2 && hour >= 20) slots.push(day + "-evening");
+  return slots;
+}
+
+/**
  * Check the database checkpoint before expensive source collection.
  * A sent report needs no more scanning; a currently sending report must not
  * race another Telegram publication. Stale/failed runs can be retried.

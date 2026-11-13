@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dueDigestSlot, escapeTelegramHtml, formatDigestParts, riyadhClock } from "./digest.logic";
+import { dueDigestSlot, escapeTelegramHtml, formatDigestParts, riyadhClock, recoverableDigestSlots } from "./digest.logic";
 import type { DigestEntry } from "./digest.logic";
 
 function mockJob(id: number, extras?: Partial<DigestEntry>): DigestEntry {
@@ -28,6 +28,35 @@ describe("daily report schedule", () => {
     expect(dueDigestSlot(new Date("2026-11-09T17:00:00Z"), 1)).toBeNull();
     expect(dueDigestSlot(new Date("2026-11-09T17:00:00Z"), 2)).toBe("2026-11-09-evening");
     expect(dueDigestSlot(new Date("2026-11-09T23:00:00Z"), 2)).toBeNull();
+  });
+});
+
+describe("recovery from skipped/delayed GitHub schedules", () => {
+  it("recovers missed previous-day reports in the next day's early hours", () => {
+    expect(recoverableDigestSlots(new Date("2026-11-13T00:30:00Z"), 2))
+      .toEqual(["2026-11-12-morning", "2026-11-12-evening"]);
+  });
+
+  it("recovers yesterday's missing evening report alongside today's morning", () => {
+    expect(recoverableDigestSlots(new Date("2026-11-13T09:54:00Z"), 2))
+      .toEqual(["2026-11-12-morning", "2026-11-12-evening", "2026-11-13-morning"]);
+  });
+
+  it("only includes the evening slot after 20:00 Riyadh", () => {
+    expect(recoverableDigestSlots(new Date("2026-11-13T16:59:00Z"), 2))
+      .toEqual(["2026-11-12-morning", "2026-11-12-evening", "2026-11-13-morning"]);
+    expect(recoverableDigestSlots(new Date("2026-11-13T17:00:00Z"), 2))
+      .toEqual(["2026-11-12-morning", "2026-11-12-evening", "2026-11-13-morning", "2026-11-13-evening"]);
+  });
+
+  it("doesn't create an evening report for once-daily configuration", () => {
+    expect(recoverableDigestSlots(new Date("2026-11-13T19:00:00Z"), 1))
+      .toEqual(["2026-11-12-morning", "2026-11-13-morning"]);
+  });
+
+  it("handles a year transition in Saudi time", () => {
+    expect(recoverableDigestSlots(new Date("2027-01-01T00:15:00Z"), 2))
+      .toEqual(["2026-12-31-morning", "2026-12-31-evening"]);
   });
 });
 
