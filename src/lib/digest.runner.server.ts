@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { collectAllSources } from "./feeds.functions";
 import { postTelegramChannel } from "./telegram-channel.server";
-import { recoverableDigestSlots, digestSlotGate, formatDigestParts, type RadarFrequency } from "./digest.logic";
+import { recoverableDigestSlots, riyadhClock, digestSlotGate, formatDigestParts, type RadarFrequency } from "./digest.logic";
 import type { Source } from "./settings";
 import type { Opportunity } from "./opportunities";
 
@@ -222,7 +222,7 @@ export async function runBackgroundRadar(now = new Date()) {
         sources_ok: collection.statuses.filter((s) => s.ok).length,
         sources_failed: collection.statuses.filter((s) => !s.ok).length,
         slot,
-        recovery: slot.slice(0, 10) !== new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(now),
+        recovery: slot.slice(0, 10) !== riyadhClock(now).day,
         skipped_collection: false,
       });
     }
