@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ApiRadarCronRouteImport } from './routes/api/radar-cron'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiRadarCronRoute = ApiRadarCronRouteImport.update({
+  id: '/api/radar-cron',
+  path: '/api/radar-cron',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/feed': typeof FeedRoute
   '/settings': typeof SettingsRoute
+  '/api/radar-cron': typeof ApiRadarCronRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/feed': typeof FeedRoute
   '/settings': typeof SettingsRoute
+  '/api/radar-cron': typeof ApiRadarCronRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/feed': typeof FeedRoute
   '/settings': typeof SettingsRoute
+  '/api/radar-cron': typeof ApiRadarCronRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/feed' | '/settings'
+  fullPaths: '/' | '/feed' | '/settings' | '/api/radar-cron'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/feed' | '/settings'
-  id: '__root__' | '/' | '/feed' | '/settings'
+  to: '/' | '/feed' | '/settings' | '/api/radar-cron'
+  id: '__root__' | '/' | '/feed' | '/settings' | '/api/radar-cron'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   FeedRoute: typeof FeedRoute
   SettingsRoute: typeof SettingsRoute
+  ApiRadarCronRoute: typeof ApiRadarCronRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/radar-cron': {
+      id: '/api/radar-cron'
+      path: '/api/radar-cron'
+      fullPath: '/api/radar-cron'
+      preLoaderRoute: typeof ApiRadarCronRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FeedRoute: FeedRoute,
   SettingsRoute: SettingsRoute,
+  ApiRadarCronRoute: ApiRadarCronRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
