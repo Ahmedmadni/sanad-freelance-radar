@@ -213,12 +213,12 @@ const KF_PAGES = [
   "https://kafiil.com/projects/other-things-2?open=1",
   "https://kafiil.com/projects/training-education-and-remote-assistance-2?open=1",
 ];
-async function fetchKafiil(): Promise<Item[]> {
-  const out: Item[] = [];
-  await Promise.all(
-    KF_PAGES.map(async (url) => {
+async function fetchKafiil(): Promise<SourceCollection> {
+  const requests = KF_PAGES.map((url) => async (): Promise<Item[]> => {
+      const out: Item[] = [];
       const res = await fetch(url, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ar" },
+        signal: AbortSignal.timeout(12_000),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const html = await res.text();
@@ -243,9 +243,9 @@ async function fetchKafiil(): Promise<Item[]> {
           employment: "عمل حر",
         });
       }
-    }),
-  );
-  return out;
+      return out;
+    });
+  return collectIndependentPages(requests, "كفيل");
 }
 
 // ---- LinkedIn public job search, location = Saudi Arabia (companies hiring accountants) ----
