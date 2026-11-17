@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSettings, type Source } from "@/lib/settings";
 import { sendTelegramTest } from "@/lib/ai.functions";
 import { sendTelegramChannelTest } from "@/lib/telegram-channel.functions";
-import { getDigestConfig, saveDigestConfig } from "@/lib/digest.functions";
+import { getDigestConfig, saveDigestConfig, runDueDigestNow } from "@/lib/digest.functions";
 import { matchesKeywords } from "@/lib/opportunities";
 import { useLiveSources } from "@/lib/use-live-sources";
 import { PwaInstall } from "@/components/PwaInstall";
@@ -49,9 +49,11 @@ function SettingsPage() {
   const live = useLiveSources(s.sources);
   const loadDigest = useServerFn(getDigestConfig);
   const saveDigest = useServerFn(saveDigestConfig);
+  const recoverDigest = useServerFn(runDueDigestNow);
   const [digestEnabled, setDigestEnabled] = useState(true);
   const [digestFrequency, setDigestFrequency] = useState<1 | 2>(1);
   const [digestBusy, setDigestBusy] = useState(false);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [digestInfo, setDigestInfo] = useState<{
     pendingCount: number;
     sourcesCount: number;
@@ -85,6 +87,33 @@ function SettingsPage() {
       toast.error(error instanceof Error ? error.message : "تعذر حفظ إعدادات التقارير");
     } finally {
       setDigestBusy(false);
+    }
+  }
+
+  async function runPendingDigestNow() {
+    setRecoveryBusy(true);
+    try {
+      const result = await recoverDigest({ data: {} });
+      const sent = result.statuses.filter((item) => item.status === "sent");
+      const skipped = result.statuses.filter((item) =>
+        item.status === "already-handled" || item.status === "in-progress");
+      if (sent.length) {
+        toast.success("تم إرسال " + sent.length + " تقرير مستحق إلى قناة سند");
+      } else if (skipped.length) {
+        toast.success("لا توجد تقارير جديدة مستحقة؛ التقارير السابقة مرسلة بالفعل");
+      } else {
+        toast.info("تم فحص التقارير، ولا توجد فترات مستحقة للإرسال");
+      }
+      const info = await loadDigest({ data: {} });
+      setDigestInfo({
+        pendingCount: info.pendingCount,
+        sourcesCount: info.sourcesCount,
+        lastRun: info.lastRun,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر فحص التقارير المستحقة");
+    } finally {
+      setRecoveryBusy(false);
     }
   }
 
@@ -130,7 +159,7 @@ function SettingsPage() {
         <p className="text-sm text-muted-foreground">تحكم في تقارير القناة وتثبيت سند على هاتفك. الخيارات الإضافية تجدها بالأسفل.</p>
       </div>
       <PwaInstall />
-            <Card title="التقرير التلقائي للقناة العامة" desc="يفحص سند الفرص الساعة 8:07 صباحاً و8:07 مساءً، ويرسل التقرير بعد الفحص مباشرة. 9:07 موعد احتياطي عند عدم الإرسال، حتى لو أغلقت الموقع.">
+            <Card title="التقرير التلقائي للقناة العامة" desc="التوقيت المستهدف 8 صباحاً و8 مساءً بتوقيت الرياض، مع إعادة المحاولة عند تأخر الجدولة. يمكنك أيضاً فحص التقارير المستحقة من هنا.">
         <div className="flex items-center justify-between">
           <Label>تفعيل التقرير التلقائي</Label>
           <Switch checked={digestEnabled} onCheckedChange={setDigestEnabled} />
@@ -149,10 +178,20 @@ function SettingsPage() {
           {digestBusy && <Loader2 className="size-4 animate-spin" />}
           حفظ جدول الإرسال ومزامنة مصادر البحث
         </Button>
+        <div className="rounded-xl border bg-muted/30 p-3">
+          <div className="mb-2 text-sm font-medium">تعويض التقارير المتأخرة</div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            افحص المصادر وأرسل أي تقرير مستحق لم يُرسل بعد. لا يعيد نشر الفرص أو التقارير التي تم إرسالها.
+          </p>
+          <Button variant="outline" disabled={recoveryBusy || digestBusy} onClick={() => void runPendingDigestNow()}>
+            {recoveryBusy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+            فحص وإرسال التقارير المستحقة الآن
+          </Button>
+        </div>
         <p className="text-xs text-muted-foreground">
           تُنشر جميع الفرص الجديدة المكتشفة منذ آخر تقرير في القناة العامة، وليس أول خمس فرص فقط.
           وإذا تجاوزت القائمة الحد المسموح به لرسالة تليجرام تُرسل على عدة أجزاء ضمن التقرير نفسه.
-          يحاول النظام مرة أخرى حوالي 9:07 صباحاً أو مساءً فقط لو لم ينجح التقرير. عند الإرسال بنجاح لا يعيد فحص المصادر. مواعيد GitHub تقريبية وليست مضمونة بالدقيقة.
+          المجدول الحالي على GitHub يحاول التشغيل مرات متعددة لكنه لا يضمن موعداً ثابتاً. لا يعيد إرسال التقارير المكتملة، ويمكنك استخدام زر التعويض إذا تأخر التقرير.
         </p>
         {digestInfo && (
           <div className="space-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
