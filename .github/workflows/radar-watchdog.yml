@@ -2,6 +2,15 @@ name: Sanad independent GitHub digest watchdog
 
 on:
   workflow_dispatch:
+  # An initial run on merge validates the live endpoint and existing secrets;
+  # subsequent checks use the separate cron schedule below.
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/digest.*"
+      - "src/lib/feeds.functions.ts"
+      - "src/lib/source-health.ts"
+      - ".github/workflows/radar-watchdog.yml"
   schedule:
     # Staggered behind the primary workflow, both use UTC. Riyadh = UTC+3.
     # Morning: 08:14, 08:44, 09:14, 10:14
