@@ -19,6 +19,9 @@ describe("job source reliability", () => {
 
   it("classifies source failures safely without returning private endpoints", () => {
     expect(classifySourceError("HTTP 403")).toBe("blocked");
+    expect(classifySourceError("source_batch_failed:blocked")).toBe("blocked");
+    expect(classifySourceError("source_batch_failed:rate-limited")).toBe("rate-limited");
+    expect(classifySourceError("source_batch_failed:timed-out")).toBe("timed-out");
     expect(classifySourceError("HTTP 429")).toBe("rate-limited");
     expect(classifySourceError("انتهت مهلة المصدر")).toBe("timed-out");
     expect(classifySourceError("تعذرت قراءة قائمة الوظائف")).toBe("format-changed");

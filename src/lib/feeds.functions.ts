@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireOwner, limitOwnerAction } from "./owner-auth";
+import { classifySourceError, type SourceErrorCode } from "./source-health";
 import { parseFeed, parseJson, dedupe, isAccounting, isAccountingRequest, isSaudi, toOpportunity, parseLinkedIn, inferEmployment, type RawItem } from "./feeds";
 import type { Employment } from "./opportunities";
 import { parseWadhefa, parseWadhefaDetail, parseMihnatiLinks, parseMihnati, parseMourjan, parseOpenSooq, parseOpenSooqLinks, parseOpenSooqDetail, parseStructuredSaudiJobs, parseGlobalJobLinks, GLOBAL_JOB_SITES, type GlobalJobSite } from "./saudi-job-sites";
@@ -23,7 +24,16 @@ export async function collectIndependentPages(
   if (requests.length === 0) return { items: [], failedRequests: 0 };
   const responses = await Promise.allSettled(requests.map((request) => request()));
   const succeeded = responses.filter((r): r is PromiseFulfilledResult<Item[]> => r.status === "fulfilled");
-  if (!succeeded.length) throw new Error("تعذر جلب جميع صفحات " + label);
+  if (!succeeded.length) {
+    // Never expose the original upstream error: it might include URLs,
+    // hidden tokens, request details, or raw anti-bot challenge data.
+    const causes = responses.map((r) => r.status === "rejected"
+      ? classifySourceError(r.reason instanceof Error ? r.reason.message : "")
+      : "unknown" as SourceErrorCode);
+    const ranked = [...new Set(causes)].sort((left, right) =>
+      causes.filter((v) => v === right).length - causes.filter((v) => v === left).length);
+    throw new Error("source_batch_failed:" + (ranked[0] ?? "unknown"));
+  }
   return {
     items: succeeded.flatMap((r) => r.value),
     failedRequests: responses.length - succeeded.length,
@@ -212,14 +222,34 @@ function arRelative(t: string): string | null {
   return mins === null ? null : new Date(Date.now() - mins * 60000).toISOString();
 }
 async function fetchMourjan(): Promise<Item[]> {
-  const res = await fetch("https://www.mourjan.com/sa/accounting/vacancies/", {
-    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ar" },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const html = await res.text();
-  if (!/class=widget|لا توجد إعلانات/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
-  return parseMourjan(html).map((job) => ({ ...job, sourceName: "مرجان" }));
+  const url = "https://www.mourjan.com/sa/accounting/vacancies/";
+  // A slow connection should not discard this entire source permanently.
+  // Retry one timeout with a shorter budget; never retry access-denied pages.
+  let lastTimeout: unknown;
+  for (const timeoutMs of [12_000, 9_000]) {
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+          "Accept-Language": "ar",
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (error) {
+      if (error instanceof Error &&
+        /abort|timeout|timed.?out|مهلة/i.test(error.name + " " + error.message)) {
+        lastTimeout = error;
+        continue;
+      }
+      throw error;
+    }
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const html = await response.text();
+    if (!/class=widget|لا توجد إعلانات/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
+    return parseMourjan(html).map((job) => ({ ...job, sourceName: "مرجان" }));
+  }
+  throw new Error(lastTimeout ? "انتهت مهلة الاتصال بمنصة مرجان بعد إعادة المحاولة" : "تعذر الاتصال بمنصة مرجان");
 }
 
 // ---- Kafiil (كفيل) freelance projects: buyers posting projects, filtered to accounting + Saudi ----
