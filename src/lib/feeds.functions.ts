@@ -398,17 +398,36 @@ async function fetchUrl(url: string, name: string, trusted: boolean): Promise<It
 export async function collectAllSources(sources: In["sources"], maxItems = 150) {
     const statuses: Status[] = [];
     const all: Item[] = [];
-    const run = async (name: string, url: string, builtIn: boolean, job: () => Promise<Item[]>) => {
+    const run = async (
+      name: string, url: string, builtIn: boolean,
+      job: () => Promise<Item[] | SourceCollection>,
+    ) => {
+      let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
-        const items = await Promise.race([
+        const outcome = await Promise.race([
           job(),
-          new Promise<never>((_resolve, reject) =>
-            setTimeout(() => reject(new Error("انتهت مهلة المصدر")), 30_000)),
+          new Promise<never>((_resolve, reject) => {
+            timeout = setTimeout(() => reject(new Error("انتهت مهلة المصدر")), 30_000);
+          }),
         ]);
+        const items = Array.isArray(outcome) ? outcome : outcome.items;
+        const failedRequests = Array.isArray(outcome) ? 0 : outcome.failedRequests;
         all.push(...items);
-        statuses.push({ name, url, ok: true, count: items.length, error: null, builtIn });
-      } catch (e: any) {
-        statuses.push({ name, url, ok: false, count: 0, error: e?.message ?? "فشل الجلب", builtIn });
+        statuses.push({
+          name, url, ok: true, count: items.length,
+          partial: failedRequests > 0, failedRequests,
+          error: failedRequests > 0 ? "تعذرت بعض صفحات المصدر" : null,
+          builtIn,
+        });
+      } catch (e: unknown) {
+        statuses.push({
+          name, url, ok: false, count: 0,
+          partial: false, failedRequests: 0,
+          error: e instanceof Error ? e.message : "فشل الجلب",
+          builtIn,
+        });
+      } finally {
+        if (timeout) clearTimeout(timeout);
       }
     };
 
