@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireOwner } from "./owner-auth";
+import { requireOwner, limitOwnerAction } from "./owner-auth";
 import { safeUrl } from "./feeds.functions";
 import type { Source } from "./settings";
 
@@ -81,4 +81,28 @@ export const saveDigestConfig = createServerFn({ method: "POST" })
       }, { onConflict: "user_id" });
     if (error) throw new Error("تعذر حفظ إعدادات التقرير: " + error.message);
     return { saved: true as const };
+  });
+
+/**
+ * Owner-only recovery action. Uses exactly the same checkpointed sender as
+ * both schedulers, so an already-sent report is never posted again.
+ * No Telegram or cron credentials are accepted from the browser.
+ */
+export const runDueDigestNow = createServerFn({ method: "POST" })
+  .middleware([requireOwner])
+  .inputValidator((_input: Record<string, never>) => ({}))
+  .handler(async ({ context }) => {
+    limitOwnerAction(context.userId, "manual-digest-recovery", 4, 60 * 60_000);
+    const { runBackgroundRadar } = await import("./digest.runner.server");
+    const outcome = await runBackgroundRadar();
+    return {
+      ownerCount: outcome.owner_count,
+      statuses: outcome.results as Array<{
+        status: string;
+        slot?: string;
+        discovered?: number;
+        sources_ok?: number;
+        sources_failed?: number;
+      }>,
+    };
   });
