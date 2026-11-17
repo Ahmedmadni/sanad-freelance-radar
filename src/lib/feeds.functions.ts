@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireOwner, limitOwnerAction } from "./owner-auth";
+import { classifySourceError, type SourceErrorCode } from "./source-health";
 import { parseFeed, parseJson, dedupe, isAccounting, isAccountingRequest, isSaudi, toOpportunity, parseLinkedIn, inferEmployment, type RawItem } from "./feeds";
 import type { Employment } from "./opportunities";
 import { parseWadhefa, parseWadhefaDetail, parseMihnatiLinks, parseMihnati, parseMourjan, parseOpenSooq, parseOpenSooqLinks, parseOpenSooqDetail, parseStructuredSaudiJobs, parseGlobalJobLinks, GLOBAL_JOB_SITES, type GlobalJobSite } from "./saudi-job-sites";
@@ -23,7 +24,16 @@ export async function collectIndependentPages(
   if (requests.length === 0) return { items: [], failedRequests: 0 };
   const responses = await Promise.allSettled(requests.map((request) => request()));
   const succeeded = responses.filter((r): r is PromiseFulfilledResult<Item[]> => r.status === "fulfilled");
-  if (!succeeded.length) throw new Error("تعذر جلب جميع صفحات " + label);
+  if (!succeeded.length) {
+    // Never expose the original upstream error: it might include URLs,
+    // hidden tokens, request details, or raw anti-bot challenge data.
+    const causes = responses.map((r) => r.status === "rejected"
+      ? classifySourceError(r.reason instanceof Error ? r.reason.message : "")
+      : "unknown" as SourceErrorCode);
+    const ranked = [...new Set(causes)].sort((left, right) =>
+      causes.filter((v) => v === right).length - causes.filter((v) => v === left).length);
+    throw new Error("source_batch_failed:" + (ranked[0] ?? "unknown"));
+  }
   return {
     items: succeeded.flatMap((r) => r.value),
     failedRequests: responses.length - succeeded.length,
