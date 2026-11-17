@@ -22,6 +22,26 @@ export const Route = createFileRoute("/api/radar-cron")({
         const rejected = await authorize(request);
         if (rejected) return rejected;
         try {
+          // Owner-controlled server diagnostics; the same private cron bearer
+          // is required BEFORE the query is inspected. Never echo raw URLs,
+          // feed payloads, error messages or secrets to a GitHub Actions log.
+          if (new URL(request.url).searchParams.get("source_health") === "1") {
+            const { collectAllSources } = await import("@/lib/feeds.functions");
+            const { classifySourceError, safeSourceLabel } = await import("@/lib/source-health");
+            const snapshot = await collectAllSources([], 2_000);
+            return Response.json({
+              checked_at: snapshot.fetchedAt,
+              opportunities_checked: snapshot.items.length,
+              sources: snapshot.statuses.map((source) => ({
+                name: safeSourceLabel(source.name),
+                ok: source.ok,
+                jobs: source.count,
+                partial: source.partial ?? false,
+                failed_requests: source.failedRequests ?? 0,
+                reason: source.ok ? null : classifySourceError(source.error),
+              })),
+            }, { headers: { "Cache-Control": "no-store" } });
+          }
           const { runBackgroundRadar } = await import("@/lib/digest.runner.server");
           const result = await runBackgroundRadar();
           return Response.json(result, { headers: { "Cache-Control": "no-store" } });
