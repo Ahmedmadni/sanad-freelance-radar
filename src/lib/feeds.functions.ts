@@ -6,7 +6,30 @@ import { parseWadhefa, parseWadhefaDetail, parseMihnatiLinks, parseMihnati, pars
 
 type In = { sources: { name: string; url: string; type: "RSS" | "Webhook" }[] };
 type Item = RawItem & { sourceName: string; location?: string; employment?: Employment };
-type Status = { name: string; url: string; ok: boolean; count: number; error: string | null; builtIn: boolean };
+type Status = {
+  name: string; url: string; ok: boolean; count: number;
+  error: string | null; builtIn: boolean;
+  partial?: boolean; failedRequests?: number;
+};
+export type SourceCollection = { items: Item[]; failedRequests: number };
+
+/** Keep verified jobs from healthy search pages even if another page fails.
+ * Only a complete outage marks the whole source unavailable.
+ * Page failures are recorded as partial coverage, not hidden as success. */
+export async function collectIndependentPages(
+  requests: Array<() => Promise<Item[]>>,
+  label: string,
+): Promise<SourceCollection> {
+  if (requests.length === 0) return { items: [], failedRequests: 0 };
+  const responses = await Promise.allSettled(requests.map((request) => request()));
+  const succeeded = responses.filter((r): r is PromiseFulfilledResult<Item[]> => r.status === "fulfilled");
+  if (!succeeded.length) throw new Error("تعذر جلب جميع صفحات " + label);
+  return {
+    items: succeeded.flatMap((r) => r.value),
+    failedRequests: responses.length - succeeded.length,
+  };
+}
+
 
 const blockedHost = (hostname: string) => {
   const h = hostname.toLowerCase().replace(/\.$/, "");
