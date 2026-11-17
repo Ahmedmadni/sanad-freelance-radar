@@ -230,6 +230,11 @@ export async function runBackgroundRadar(now = new Date()) {
         discovered: opportunities.length,
         sources_ok: collection.statuses.filter((s) => s.ok).length,
         sources_failed: collection.statuses.filter((s) => !s.ok).length,
+        sources_partial: collection.statuses.filter((s) => s.partial).length,
+        partial_sources: collection.statuses.filter((s) => s.partial).map((s) => ({
+          name: safeSourceLabel(s.name),
+          failed_requests: s.failedRequests ?? 0,
+        })),
         // Safe fixed codes give accurate diagnostics without logging remote URLs.
         failed_sources: collection.statuses.filter((s) => !s.ok).map((s) => ({
           name: safeSourceLabel(s.name),

@@ -6,7 +6,30 @@ import { parseWadhefa, parseWadhefaDetail, parseMihnatiLinks, parseMihnati, pars
 
 type In = { sources: { name: string; url: string; type: "RSS" | "Webhook" }[] };
 type Item = RawItem & { sourceName: string; location?: string; employment?: Employment };
-type Status = { name: string; url: string; ok: boolean; count: number; error: string | null; builtIn: boolean };
+type Status = {
+  name: string; url: string; ok: boolean; count: number;
+  error: string | null; builtIn: boolean;
+  partial?: boolean; failedRequests?: number;
+};
+export type SourceCollection = { items: Item[]; failedRequests: number };
+
+/** Keep verified jobs from healthy search pages even if another page fails.
+ * Only a complete outage marks the whole source unavailable.
+ * Page failures are recorded as partial coverage, not hidden as success. */
+export async function collectIndependentPages(
+  requests: Array<() => Promise<Item[]>>,
+  label: string,
+): Promise<SourceCollection> {
+  if (requests.length === 0) return { items: [], failedRequests: 0 };
+  const responses = await Promise.allSettled(requests.map((request) => request()));
+  const succeeded = responses.filter((r): r is PromiseFulfilledResult<Item[]> => r.status === "fulfilled");
+  if (!succeeded.length) throw new Error("تعذر جلب جميع صفحات " + label);
+  return {
+    items: succeeded.flatMap((r) => r.value),
+    failedRequests: responses.length - succeeded.length,
+  };
+}
+
 
 const blockedHost = (hostname: string) => {
   const h = hostname.toLowerCase().replace(/\.$/, "");
@@ -95,65 +118,91 @@ const ACC = /محاسب|محاسبة|محاسبه|دفاتر|ضريب|زكا|ق�
 const WANTS = /مطلوب|احتاج|أحتاج|ابغى|أبغى|ابي |نبحث عن|نحتاج|ابحث عن محاسب|أبحث عن محاسب|يوجد لدينا|لمن لديه خبرة/;
 const SELF_AD = /ابحث عن وظيفة|أبحث عن وظيفة|ابحث عن عمل|أبحث عن عمل|^انا محاسب|^أنا محاسب|لدي خبرة|لدية خبرة|اقدم خدم|أقدم خدم|نقدم خدم|خدمات محاسبية|مكتب محاسب|برنامج محاسب|برامج محاسب|باقة|كاشير|حاصل على|للبيع|اشتراك|نظام نقاط بيع/;
 
-async function fetchHaraj(): Promise<Item[]> {
-  const out: Item[] = [];
-  await Promise.all(
-    HARAJ_SEARCHES.flatMap((search) => [1, 2].map((page) => ({ search, page }))).map(async ({ search, page }) => {
+async function fetchHaraj(): Promise<SourceCollection> {
+  const requests = HARAJ_SEARCHES.flatMap((search) =>
+    [1, 2].map((page) => async (): Promise<Item[]> => {
       const res = await fetch(HARAJ_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Origin: "https://haraj.com.sa", "User-Agent": "Mozilla/5.0" },
         body: JSON.stringify({ query: HARAJ_QUERY, variables: { search, page } }),
+        signal: AbortSignal.timeout(12_000),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = (await res.json()) as any;
-      for (const p of j?.data?.search?.items ?? []) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const j = (await res.json()) as {
+        data?: { search?: { items?: Array<{
+          title?: string; bodyTEXT?: string; URL?: string; updateDate?: number; postDate?: number; city?: string;
+        }> } };
+      };
+      const posts = j?.data?.search?.items;
+      if (!Array.isArray(posts)) throw new Error("تعذر التحقق من نتائج حراج");
+      const matched: Item[] = [];
+      for (const p of posts) {
         const title = String(p.title ?? "");
         const body = String(p.bodyTEXT ?? "");
-        const head = `${title} ${body.slice(0, 120)}`;
-        if (!WANTS.test(head) || !ACC.test(head) || SELF_AD.test(title) || SELF_AD.test(body.slice(0, 80)) || !isAccountingRequest(`${title} ${body}`)) continue;
-        out.push({
-          title,
-          description: body.slice(0, 600),
-          link: `https://haraj.com.sa/${String(p.URL ?? "").replace(/^\/+/, "")}`,
-          publishedAt: p.updateDate || p.postDate ? new Date(Number(p.updateDate || p.postDate) * 1000).toISOString() : null,
+        const head = title + " " + body.slice(0, 120);
+        if (!WANTS.test(head) || !ACC.test(head) || SELF_AD.test(title) ||
+          SELF_AD.test(body.slice(0, 80)) || !isAccountingRequest(title + " " + body)) continue;
+        const timestamp = Number(p.updateDate || p.postDate);
+        const publishedAt = Number.isFinite(timestamp) && timestamp > 0
+          ? new Date(timestamp * 1000).toISOString() : null;
+        matched.push({
+          title, description: body.slice(0, 600),
+          link: "https://haraj.com.sa/" + String(p.URL ?? "").replace(/^\/+/, ""),
+          publishedAt,
           sourceName: "حراج",
-          location: p.city ? `حراج · ${p.city}` : "حراج",
-          employment: inferEmployment(`${title} ${body}`),
+          location: p.city ? "حراج · " + p.city : "حراج",
+          employment: inferEmployment(title + " " + body),
         });
       }
+      return matched;
     }),
   );
-  return out;
+  return collectIndependentPages(requests, "حراج");
 }
 
 // ---- OpenSooq Saudi (السوق المفتوح): job vacancies + "wanted" posts only, never service ads ----
 const OS_TERMS = ["مطلوب محاسب", "محاسب", "محاسبة", "مسك دفاتر"];
-async function fetchOpenSooq(): Promise<Item[]> {
-  const out: Item[] = [];
+async function fetchOpenSooq(): Promise<SourceCollection> {
   const links = new Set<string>();
-  await Promise.all(
-    OS_TERMS.map(async (term) => {
-      const res = await fetch(`https://sa.opensooq.com/ar/find?term=${encodeURIComponent(term)}`, {
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ar" },
-        signal: AbortSignal.timeout(15000),
+  const searches = await collectIndependentPages(
+    OS_TERMS.map((term) => async (): Promise<Item[]> => {
+      const response = await fetch("https://sa.opensooq.com/ar/find?term=" + encodeURIComponent(term), {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+          "Accept-Language": "ar",
+        },
+        signal: AbortSignal.timeout(12_000),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const html = await res.text();
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const html = await response.text();
       if (/<script\b[^>]*id=["']__NEXT_DATA__["']/.test(html)) {
-        out.push(...parseOpenSooq(html).map((job) => ({ ...job, sourceName: "السوق المفتوح" })));
-      } else {
-        if (!/data-testid=["']serp-(?:job-card|job-specs)["']/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
-        for (const link of parseOpenSooqLinks(html)) links.add(link);
+        return parseOpenSooq(html).map((job) => ({ ...job, sourceName: "السوق المفتوح" }));
       }
+      if (!/data-testid=["']serp-(?:job-card|job-specs)["']/.test(html)) {
+        throw new Error("تعذرت قراءة قائمة الوظائف");
+      }
+      for (const link of parseOpenSooqLinks(html)) links.add(link);
+      return [];
     }),
+    "السوق المفتوح",
   );
-  const candidates = [...links].slice(0, 12);
-  for (let start = 0; start < candidates.length; start += 3) {
-    await Promise.all(candidates.slice(start, start + 3).map(async (link) => {
-      out.push(...parseOpenSooqDetail(await fetchJobPage(link), link).map((job) => ({ ...job, sourceName: "السوق المفتوح" })));
-    }));
+
+  const details = await Promise.allSettled(
+    [...links].slice(0, 12).map(async (link): Promise<Item[]> =>
+      parseOpenSooqDetail(await fetchJobPage(link), link)
+        .map((job) => ({ ...job, sourceName: "السوق المفتوح" })),
+    ),
+  );
+  const verified = details.filter((result): result is PromiseFulfilledResult<Item[]> =>
+    result.status === "fulfilled");
+  // A list of unverified links is not proof of any open vacancy.
+  if (links.size && verified.length === 0 && searches.items.length === 0) {
+    throw new Error("تعذر التحقق من حالة جميع إعلانات السوق المفتوح");
   }
-  return out;
+  return {
+    items: [...searches.items, ...verified.flatMap((result) => result.value)],
+    failedRequests: searches.failedRequests + details.length - verified.length,
+  };
 }
 
 // ---- Mourjan (مرجان) Saudi accounting vacancies: every ad there is an employer looking for an accountant ----
@@ -179,12 +228,12 @@ const KF_PAGES = [
   "https://kafiil.com/projects/other-things-2?open=1",
   "https://kafiil.com/projects/training-education-and-remote-assistance-2?open=1",
 ];
-async function fetchKafiil(): Promise<Item[]> {
-  const out: Item[] = [];
-  await Promise.all(
-    KF_PAGES.map(async (url) => {
+async function fetchKafiil(): Promise<SourceCollection> {
+  const requests = KF_PAGES.map((url) => async (): Promise<Item[]> => {
+      const out: Item[] = [];
       const res = await fetch(url, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ar" },
+        signal: AbortSignal.timeout(12_000),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const html = await res.text();
@@ -209,38 +258,44 @@ async function fetchKafiil(): Promise<Item[]> {
           employment: "عمل حر",
         });
       }
-    }),
-  );
-  return out;
+      return out;
+    });
+  return collectIndependentPages(requests, "كفيل");
 }
 
 // ---- LinkedIn public job search, location = Saudi Arabia (companies hiring accountants) ----
 const LI_KEYWORDS = ["accountant", "محاسب", "bookkeeper", "accounting"];
 
 
-async function fetchLinkedIn(): Promise<Item[]> {
-  const out: Item[] = [];
-  await Promise.all(
-    LI_KEYWORDS.flatMap((k) => [0, 25].map((start) => ({ k, start }))).map(async ({ k, start }) => {
-      const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(k)}&location=Saudi%20Arabia&f_TPR=r2592000&start=${start}`;
-      const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36" } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      for (const j of parseLinkedIn(await res.text())) {
-        if (!isSaudi(j.location) || !isAccountingRequest(j.title, true)) continue;
-        out.push({
+async function fetchLinkedIn(): Promise<SourceCollection> {
+  const requests = LI_KEYWORDS.flatMap((keyword) =>
+    [0, 25].map((start) => async (): Promise<Item[]> => {
+      const url = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+        + "?keywords=" + encodeURIComponent(keyword)
+        + "&location=Saudi%20Arabia&f_TPR=r2592000&start=" + start;
+      const response = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36" },
+        signal: AbortSignal.timeout(12_000),
+      });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const html = await response.text();
+      if (/captcha|verify you are human|access denied|just a moment/i.test(html.slice(0, 2400))) {
+        throw new Error("LinkedIn challenge page");
+      }
+      return parseLinkedIn(html)
+        .filter((j) => isSaudi(j.location) && isAccountingRequest(j.title, true))
+        .map((j) => ({
           title: j.title,
-          description: `${j.company} تبحث عن ${j.title} — ${j.location}`,
+          description: j.company + " تبحث عن " + j.title + " — " + j.location,
           link: j.link,
           publishedAt: j.date ? new Date(j.date).toISOString() : null,
           sourceName: "لينكدإن",
-          location: `${j.company} · ${j.location}`,
-          // LinkedIn listings are salaried positions unless the title says otherwise.
+          location: j.company + " · " + j.location,
           employment: inferEmployment(j.title),
-        });
-      }
+        }));
     }),
   );
-  return out;
+  return collectIndependentPages(requests, "لينكدإن");
 }
 
 const WADHEFA_URL = "https://www.wadhefa.com/jobfind.php?jids%5B%5D=62";
@@ -255,38 +310,36 @@ async function fetchJobPage(url: string) {
   return res.text();
 }
 
-async function fetchWadhefa(): Promise<Item[]> {
+async function fetchWadhefa(): Promise<SourceCollection> {
   const html = await fetchJobPage(WADHEFA_URL);
   if (!/job_id\[\]|لا توجد وظائف|لا توجد نتائج/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
   const jobs = parseWadhefa(html).slice(0, 30);
-  const out: Item[] = [];
-  // Bound concurrency while verifying that each job's application is still open.
-  for (let start = 0; start < jobs.length; start += 5) {
-    await Promise.all(jobs.slice(start, start + 5).map(async (job) => {
+  return collectIndependentPages(
+    jobs.map((job) => async (): Promise<Item[]> => {
       const detail = parseWadhefaDetail(await fetchJobPage(job.link));
-      if (!detail.open) return;
-      out.push({ ...job, description: detail.description || job.description, employment: detail.employment, sourceName: "وظيفة.كوم" });
-    }));
-  }
-  return out;
+      return detail.open
+        ? [{ ...job, description: detail.description || job.description,
+          employment: detail.employment, sourceName: "وظيفة.كوم" }]
+        : [];
+    }),
+    "وظيفة.كوم",
+  );
 }
 
-async function fetchMihnati(): Promise<Item[]> {
+async function fetchMihnati(): Promise<SourceCollection> {
   const html = await fetchJobPage(MIHNATI_URL);
   if (!/jlist|لا توجد وظائف|No jobs/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
   const links = parseMihnatiLinks(html).slice(0, 30);
-  const out: Item[] = [];
-  for (let start = 0; start < links.length; start += 5) {
-    await Promise.all(links.slice(start, start + 5).map(async (link) => {
-      for (const job of parseMihnati(await fetchJobPage(link), link)) {
-        out.push({ ...job, sourceName: "مهنتي" });
-      }
-    }));
-  }
-  return out;
+  return collectIndependentPages(
+    links.map((link) => async (): Promise<Item[]> =>
+      parseMihnati(await fetchJobPage(link), link)
+        .map((job) => ({ ...job, sourceName: "مهنتي" })),
+    ),
+    "مهنتي",
+  );
 }
 
-async function fetchGlobalJobSite(site: GlobalJobSite): Promise<Item[]> {
+async function fetchGlobalJobSite(site: GlobalJobSite): Promise<SourceCollection> {
   const config = GLOBAL_JOB_SITES[site];
   const read = async (url: string) => {
     try {
@@ -305,17 +358,18 @@ async function fetchGlobalJobSite(site: GlobalJobSite): Promise<Item[]> {
   const html = await read(config.search);
   const links = parseGlobalJobLinks(html, site).slice(0, 10);
   if (!links.length) throw new Error("تعذرت قراءة إعلانات المنصة؛ متاحة للتصفح المباشر");
-  const out: Item[] = [];
-  let verifiedPages = 0;
-  for (let start = 0; start < links.length; start += 5) {
-    await Promise.all(links.slice(start, start + 5).map(async (link) => {
+  return collectIndependentPages(
+    links.map((link) => async (): Promise<Item[]> => {
       const detail = await read(link);
-      if (/"@type"\s*:\s*(?:"JobPosting"|\[[^\]]*"JobPosting")/.test(detail)) verifiedPages += 1;
-      for (const job of parseStructuredSaudiJobs(detail, link, config.origin)) out.push({ ...job, sourceName: config.name });
-    }));
-  }
-  if (!verifiedPages) throw new Error("تعذر التحقق من موقع الوظائف وصلاحية التقديم");
-  return out;
+      // Reject HTML navigation and challenge pages without verified job metadata.
+      if (!/"@type"\s*:\s*(?:"JobPosting"|\[[^\]]*"JobPosting")/.test(detail)) {
+        throw new Error("تعذر التحقق من موقع الوظائف وصلاحية التقديم");
+      }
+      return parseStructuredSaudiJobs(detail, link, config.origin)
+        .map((job) => ({ ...job, sourceName: config.name }));
+    }),
+    config.name,
+  );
 }
 
 // Mostaql, Khamsat and Baaeed are deliberately available as manual links
@@ -344,17 +398,36 @@ async function fetchUrl(url: string, name: string, trusted: boolean): Promise<It
 export async function collectAllSources(sources: In["sources"], maxItems = 150) {
     const statuses: Status[] = [];
     const all: Item[] = [];
-    const run = async (name: string, url: string, builtIn: boolean, job: () => Promise<Item[]>) => {
+    const run = async (
+      name: string, url: string, builtIn: boolean,
+      job: () => Promise<Item[] | SourceCollection>,
+    ) => {
+      let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
-        const items = await Promise.race([
+        const outcome = await Promise.race([
           job(),
-          new Promise<never>((_resolve, reject) =>
-            setTimeout(() => reject(new Error("انتهت مهلة المصدر")), 30_000)),
+          new Promise<never>((_resolve, reject) => {
+            timeout = setTimeout(() => reject(new Error("انتهت مهلة المصدر")), 30_000);
+          }),
         ]);
+        const items = Array.isArray(outcome) ? outcome : outcome.items;
+        const failedRequests = Array.isArray(outcome) ? 0 : outcome.failedRequests;
         all.push(...items);
-        statuses.push({ name, url, ok: true, count: items.length, error: null, builtIn });
-      } catch (e: any) {
-        statuses.push({ name, url, ok: false, count: 0, error: e?.message ?? "فشل الجلب", builtIn });
+        statuses.push({
+          name, url, ok: true, count: items.length,
+          partial: failedRequests > 0, failedRequests,
+          error: failedRequests > 0 ? "تعذرت بعض صفحات المصدر" : null,
+          builtIn,
+        });
+      } catch (e: unknown) {
+        statuses.push({
+          name, url, ok: false, count: 0,
+          partial: false, failedRequests: 0,
+          error: e instanceof Error ? e.message : "فشل الجلب",
+          builtIn,
+        });
+      } finally {
+        if (timeout) clearTimeout(timeout);
       }
     };
 
