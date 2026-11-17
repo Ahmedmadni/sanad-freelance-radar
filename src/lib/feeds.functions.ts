@@ -147,7 +147,7 @@ async function fetchHaraj(): Promise<SourceCollection> {
           ? new Date(timestamp * 1000).toISOString() : null;
         matched.push({
           title, description: body.slice(0, 600),
-          link: "https://haraj.com.sa/" + String(p.URL ?? "").replace(/^\\/+/, ""),
+          link: "https://haraj.com.sa/" + String(p.URL ?? "").replace(/^\/+/, ""),
           publishedAt,
           sourceName: "حراج",
           location: p.city ? "حراج · " + p.city : "حراج",
