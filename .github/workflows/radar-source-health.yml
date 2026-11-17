@@ -1,0 +1,64 @@
+name: Sanad protected source health diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/routes/api/radar-cron.ts"
+      - "src/lib/feeds.functions.ts"
+      - ".github/workflows/radar-source-health.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      SANAD_DIGEST_URL: ${{ secrets.SANAD_DIGEST_URL }}
+      SANAD_DIGEST_CRON_SECRET: ${{ secrets.SANAD_DIGEST_CRON_SECRET }}
+    steps:
+      - name: Confirm private diagnostics configuration
+        run: |
+          test -n "$SANAD_DIGEST_URL" || { echo "::error::Missing radar URL"; exit 1; }
+          test -n "$SANAD_DIGEST_CRON_SECRET" || { echo "::error::Missing cron authorization"; exit 1; }
+          case "$SANAD_DIGEST_URL" in
+            https://*/api/radar-cron) ;;
+            *) echo "::error::Invalid radar endpoint"; exit 1 ;;
+          esac
+      - name: Probe all built-in job sources without Telegram publication
+        shell: bash
+        run: |
+          response_file="$RUNNER_TEMP/sanad-source-health.json"
+          curl --fail-with-body --silent --show-error --retry 1 \
+            --retry-all-errors --max-time 180 \
+            -X POST \
+            -H "Authorization: Bearer $SANAD_DIGEST_CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -o "$response_file" "${SANAD_DIGEST_URL}?source_health=1"
+
+          if ! jq -e '
+            (.checked_at | type == "string") and
+            (.sources | type == "array") and
+            (.sources | length > 0) and
+            all(.sources[]; (.ok | type == "boolean") and (.jobs | type == "number"))
+          ' "$response_file" >/dev/null; then
+            echo "::error::Health probe did not return verified source statuses"
+            exit 1
+          fi
+          echo "## Sanad live source health" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '
+            "- Sources OK: " + ([.sources[] | select(.ok == true)] | length | tostring),
+            "- Sources completely failed: " + ([.sources[] | select(.ok == false)] | length | tostring),
+            "- Sources partly successful: " + ([.sources[] | select(.partial == true)] | length | tostring),
+            "",
+            (.sources[] | "- " + .name + " | " +
+              (if .ok then (if .partial then "PARTIAL" else "OK" end) else "FAILED" end) +
+              " | jobs: " + (.jobs | tostring) +
+              " | failed requests: " + (.failed_requests | tostring) +
+              " | cause: " + (.reason // "none"))
+          ' "$response_file" >> "$GITHUB_STEP_SUMMARY"
+          # An unavailable external source is reported, not silently counted
+          # as zero jobs; the protected probe itself must still complete.
