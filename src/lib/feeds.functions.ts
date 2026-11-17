@@ -319,8 +319,8 @@ async function fetchGlobalJobSite(site: GlobalJobSite): Promise<Item[]> {
 }
 
 // Mostaql, Khamsat and Baaeed are deliberately available as manual links
-// in the user interface. Previously checkBuyerPage always threw, so these
-// sources were falsely presented as three automated-source failures.
+// in the user interface. Their former collector always failed, so they
+// were incorrectly counted as three broken automated sources.
 // Freelancer projects are global; keep only ones that mention Saudi Arabia.
 const BUILT_IN_RSS: { name: string; url: string }[] = [
   { name: "Freelancer", url: "https://www.freelancer.com/rss/job_accounting.xml" },
