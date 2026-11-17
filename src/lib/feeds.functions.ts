@@ -118,35 +118,46 @@ const ACC = /محاسب|محاسبة|محاسبه|دفاتر|ضريب|زكا|ق�
 const WANTS = /مطلوب|احتاج|أحتاج|ابغى|أبغى|ابي |نبحث عن|نحتاج|ابحث عن محاسب|أبحث عن محاسب|يوجد لدينا|لمن لديه خبرة/;
 const SELF_AD = /ابحث عن وظيفة|أبحث عن وظيفة|ابحث عن عمل|أبحث عن عمل|^انا محاسب|^أنا محاسب|لدي خبرة|لدية خبرة|اقدم خدم|أقدم خدم|نقدم خدم|خدمات محاسبية|مكتب محاسب|برنامج محاسب|برامج محاسب|باقة|كاشير|حاصل على|للبيع|اشتراك|نظام نقاط بيع/;
 
-async function fetchHaraj(): Promise<Item[]> {
-  const out: Item[] = [];
-  await Promise.all(
-    HARAJ_SEARCHES.flatMap((search) => [1, 2].map((page) => ({ search, page }))).map(async ({ search, page }) => {
+async function fetchHaraj(): Promise<SourceCollection> {
+  const requests = HARAJ_SEARCHES.flatMap((search) =>
+    [1, 2].map((page) => async (): Promise<Item[]> => {
       const res = await fetch(HARAJ_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Origin: "https://haraj.com.sa", "User-Agent": "Mozilla/5.0" },
         body: JSON.stringify({ query: HARAJ_QUERY, variables: { search, page } }),
+        signal: AbortSignal.timeout(12_000),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = (await res.json()) as any;
-      for (const p of j?.data?.search?.items ?? []) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const j = (await res.json()) as {
+        data?: { search?: { items?: Array<{
+          title?: string; bodyTEXT?: string; URL?: string; updateDate?: number; postDate?: number; city?: string;
+        }> } };
+      };
+      const posts = j?.data?.search?.items;
+      if (!Array.isArray(posts)) throw new Error("تعذر التحقق من نتائج حراج");
+      const matched: Item[] = [];
+      for (const p of posts) {
         const title = String(p.title ?? "");
         const body = String(p.bodyTEXT ?? "");
-        const head = `${title} ${body.slice(0, 120)}`;
-        if (!WANTS.test(head) || !ACC.test(head) || SELF_AD.test(title) || SELF_AD.test(body.slice(0, 80)) || !isAccountingRequest(`${title} ${body}`)) continue;
-        out.push({
-          title,
-          description: body.slice(0, 600),
-          link: `https://haraj.com.sa/${String(p.URL ?? "").replace(/^\/+/, "")}`,
-          publishedAt: p.updateDate || p.postDate ? new Date(Number(p.updateDate || p.postDate) * 1000).toISOString() : null,
+        const head = title + " " + body.slice(0, 120);
+        if (!WANTS.test(head) || !ACC.test(head) || SELF_AD.test(title) ||
+          SELF_AD.test(body.slice(0, 80)) || !isAccountingRequest(title + " " + body)) continue;
+        const timestamp = Number(p.updateDate || p.postDate);
+        const publishedAt = Number.isFinite(timestamp) && timestamp > 0
+          ? new Date(timestamp * 1000).toISOString() : null;
+        matched.push({
+          title, description: body.slice(0, 600),
+          link: "https://haraj.com.sa/" + String(p.URL ?? "").replace(/^\\/+/, ""),
+          publishedAt,
           sourceName: "حراج",
-          location: p.city ? `حراج · ${p.city}` : "حراج",
-          employment: inferEmployment(`${title} ${body}`),
+          location: p.city ? "حراج · " + p.city : "حراج",
+          employment: inferEmployment(title + " " + body),
         });
       }
+      return matched;
     }),
   );
-  return out;
+  return collectIndependentPages(requests, "حراج");
 }
 
 // ---- OpenSooq Saudi (السوق المفتوح): job vacancies + "wanted" posts only, never service ads ----
