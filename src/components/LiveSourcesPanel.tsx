@@ -20,9 +20,16 @@ export function SourcesStatus({ q }: { q: ReturnType<typeof useLiveSources> }) {
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
         {d?.statuses.map((s) => (
-          <span key={s.url} className={s.ok ? "flex items-center gap-1 text-muted-foreground" : "flex items-center gap-1 text-destructive"}>
-            {s.ok ? <CheckCircle2 className="size-3 text-primary" /> : <AlertCircle className="size-3" />}
-            <a href={s.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2" title={`فتح ${s.name}`}>{s.name}</a>: {s.ok ? `${s.count}` : s.error}
+          <span key={s.url} className={s.ok && !s.partial
+            ? "flex items-center gap-1 text-muted-foreground"
+            : "flex items-center gap-1 text-amber-700 dark:text-amber-400"}>
+            {s.ok && !s.partial
+              ? <CheckCircle2 className="size-3 text-primary" />
+              : <AlertCircle className="size-3" />}
+            <a href={s.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2" title={`فتح ${s.name}`}>{s.name}</a>:
+            {s.ok
+              ? `${s.count} فرصة${s.partial ? " · جلب جزئي (" + s.failedRequests + " طلبات لم تكتمل)" : ""}`
+              : s.error}
           </span>
         ))}
       </div>
