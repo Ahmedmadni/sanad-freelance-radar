@@ -62,6 +62,8 @@ jobs:
               " | jobs: " + (.jobs | tostring) +
               " | failed requests: " + (.failed_requests | tostring) +
               " | cause: " + (.reason // "none"))
-          ' "$response_file" >> "$GITHUB_STEP_SUMMARY"
+          ' "$response_file" | tee -a "$GITHUB_STEP_SUMMARY"
+          # Printed output includes only whitelisted source names and fixed
+          # error categories. No secret, URL or raw feed body is returned.
           # An unavailable external source is reported, not silently counted
           # as zero jobs; the protected probe itself must still complete.
