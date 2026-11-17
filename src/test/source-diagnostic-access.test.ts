@@ -8,13 +8,14 @@ describe("protected source diagnostics", () => {
   it("requires server cron authorization before reading diagnostic mode", () => {
     expect(cron).toContain("if (rejected) return rejected;");
     expect(cron).toContain('searchParams.get("source_health") === "1"');
+    expect(cron).toContain('request.headers.get("X-Sanad-Source-Health") === "1"');
     expect(cron.indexOf("if (rejected) return rejected;")).toBeLessThan(
       cron.indexOf('searchParams.get("source_health")'),
     );
   });
 
   it("collects built-in job sources without saving or publishing opportunities", () => {
-    const begin = cron.indexOf('if (new URL(request.url).searchParams.get("source_health")');
+    const begin = cron.indexOf('if (request.headers.get("X-Sanad-Source-Health")');
     const end = cron.indexOf('const { runBackgroundRadar }', begin);
     const diagnostic = cron.slice(begin, end);
     expect(diagnostic).toContain('collectAllSources([], 2_000)');
@@ -28,6 +29,7 @@ describe("protected source diagnostics", () => {
   it("does not put the cron key into the workflow output", () => {
     expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).toContain('source_health=1"');
+    expect(workflow).toContain("X-Sanad-Source-Health: 1");
     expect(workflow).toContain('$SANAD_DIGEST_CRON_SECRET');
     expect(workflow).toContain('"$GITHUB_STEP_SUMMARY"');
     expect(workflow).not.toContain("cat \"$response_file\"");

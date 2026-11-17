@@ -37,6 +37,7 @@ jobs:
             -X POST \
             -H "Authorization: Bearer $SANAD_DIGEST_CRON_SECRET" \
             -H "Content-Type: application/json" \
+            -H "X-Sanad-Source-Health: 1" \
             -o "$response_file" "${SANAD_DIGEST_URL}?source_health=1"
 
           if ! jq -e '
@@ -46,6 +47,8 @@ jobs:
             all(.sources[]; (.ok | type == "boolean") and (.jobs | type == "number"))
           ' "$response_file" >/dev/null; then
             echo "::error::Health probe did not return verified source statuses"
+            # Print only the response structure, never payload values or secrets.
+            jq -r 'if type == "object" then "Response fields: " + (keys | join(", ")) else "Unexpected response type: " + type end' "$response_file" || true
             exit 1
           fi
           echo "## Sanad live source health" >> "$GITHUB_STEP_SUMMARY"
