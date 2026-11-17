@@ -25,7 +25,7 @@ export const Route = createFileRoute("/api/radar-cron")({
           // Owner-controlled server diagnostics; the same private cron bearer
           // is required BEFORE the query is inspected. Never echo raw URLs,
           // feed payloads, error messages or secrets to a GitHub Actions log.
-          if (new URL(request.url).searchParams.get("source_health") === "1") {
+          if (request.headers.get("X-Sanad-Source-Health") === "1" || new URL(request.url).searchParams.get("source_health") === "1") {
             const { collectAllSources } = await import("@/lib/feeds.functions");
             const { classifySourceError, safeSourceLabel } = await import("@/lib/source-health");
             const snapshot = await collectAllSources([], 2_000);
