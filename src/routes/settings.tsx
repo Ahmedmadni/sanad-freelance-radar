@@ -109,6 +109,11 @@ function SettingsPage() {
       if (failedSourceNames.length > 0) {
         toast.warning("بعض المصادر لم تُفحص بنجاح: " + failedSourceNames.join("، "));
       }
+      const partialNames = [...new Set(result.statuses.flatMap((item) =>
+        (item.partial_sources ?? []).map((source) => source.name)))];
+      if (partialNames.length > 0) {
+        toast.warning("تم الحصول على نتائج جزئية من: " + partialNames.join("، "));
+      }
       const info = await loadDigest({ data: {} });
       setDigestInfo({
         pendingCount: info.pendingCount,
