@@ -104,6 +104,8 @@ export const runDueDigestNow = createServerFn({ method: "POST" })
         sources_ok?: number;
         sources_failed?: number;
         failed_sources?: Array<{ name: string; reason: string }>;
+        partial_sources?: Array<{ name: string; failed_requests: number }>;
+        sources_partial?: number;
       }>,
     };
   });
