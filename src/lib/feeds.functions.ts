@@ -339,7 +339,7 @@ async function fetchMihnati(): Promise<SourceCollection> {
   );
 }
 
-async function fetchGlobalJobSite(site: GlobalJobSite): Promise<Item[]> {
+async function fetchGlobalJobSite(site: GlobalJobSite): Promise<SourceCollection> {
   const config = GLOBAL_JOB_SITES[site];
   const read = async (url: string) => {
     try {
@@ -358,17 +358,18 @@ async function fetchGlobalJobSite(site: GlobalJobSite): Promise<Item[]> {
   const html = await read(config.search);
   const links = parseGlobalJobLinks(html, site).slice(0, 10);
   if (!links.length) throw new Error("تعذرت قراءة إعلانات المنصة؛ متاحة للتصفح المباشر");
-  const out: Item[] = [];
-  let verifiedPages = 0;
-  for (let start = 0; start < links.length; start += 5) {
-    await Promise.all(links.slice(start, start + 5).map(async (link) => {
+  return collectIndependentPages(
+    links.map((link) => async (): Promise<Item[]> => {
       const detail = await read(link);
-      if (/"@type"\s*:\s*(?:"JobPosting"|\[[^\]]*"JobPosting")/.test(detail)) verifiedPages += 1;
-      for (const job of parseStructuredSaudiJobs(detail, link, config.origin)) out.push({ ...job, sourceName: config.name });
-    }));
-  }
-  if (!verifiedPages) throw new Error("تعذر التحقق من موقع الوظائف وصلاحية التقديم");
-  return out;
+      // Reject HTML navigation and challenge pages without verified job metadata.
+      if (!/"@type"\s*:\s*(?:"JobPosting"|\[[^\]]*"JobPosting")/.test(detail)) {
+        throw new Error("تعذر التحقق من موقع الوظائف وصلاحية التقديم");
+      }
+      return parseStructuredSaudiJobs(detail, link, config.origin)
+        .map((job) => ({ ...job, sourceName: config.name }));
+    }),
+    config.name,
+  );
 }
 
 // Mostaql, Khamsat and Baaeed are deliberately available as manual links
