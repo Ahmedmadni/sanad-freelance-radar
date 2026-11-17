@@ -162,32 +162,47 @@ async function fetchHaraj(): Promise<SourceCollection> {
 
 // ---- OpenSooq Saudi (السوق المفتوح): job vacancies + "wanted" posts only, never service ads ----
 const OS_TERMS = ["مطلوب محاسب", "محاسب", "محاسبة", "مسك دفاتر"];
-async function fetchOpenSooq(): Promise<Item[]> {
-  const out: Item[] = [];
+async function fetchOpenSooq(): Promise<SourceCollection> {
   const links = new Set<string>();
-  await Promise.all(
-    OS_TERMS.map(async (term) => {
-      const res = await fetch(`https://sa.opensooq.com/ar/find?term=${encodeURIComponent(term)}`, {
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ar" },
-        signal: AbortSignal.timeout(15000),
+  const searches = await collectIndependentPages(
+    OS_TERMS.map((term) => async (): Promise<Item[]> => {
+      const response = await fetch("https://sa.opensooq.com/ar/find?term=" + encodeURIComponent(term), {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+          "Accept-Language": "ar",
+        },
+        signal: AbortSignal.timeout(12_000),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const html = await res.text();
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const html = await response.text();
       if (/<script\b[^>]*id=["']__NEXT_DATA__["']/.test(html)) {
-        out.push(...parseOpenSooq(html).map((job) => ({ ...job, sourceName: "السوق المفتوح" })));
-      } else {
-        if (!/data-testid=["']serp-(?:job-card|job-specs)["']/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
-        for (const link of parseOpenSooqLinks(html)) links.add(link);
+        return parseOpenSooq(html).map((job) => ({ ...job, sourceName: "السوق المفتوح" }));
       }
+      if (!/data-testid=["']serp-(?:job-card|job-specs)["']/.test(html)) {
+        throw new Error("تعذرت قراءة قائمة الوظائف");
+      }
+      for (const link of parseOpenSooqLinks(html)) links.add(link);
+      return [];
     }),
+    "السوق المفتوح",
   );
-  const candidates = [...links].slice(0, 12);
-  for (let start = 0; start < candidates.length; start += 3) {
-    await Promise.all(candidates.slice(start, start + 3).map(async (link) => {
-      out.push(...parseOpenSooqDetail(await fetchJobPage(link), link).map((job) => ({ ...job, sourceName: "السوق المفتوح" })));
-    }));
+
+  const details = await Promise.allSettled(
+    [...links].slice(0, 12).map(async (link): Promise<Item[]> =>
+      parseOpenSooqDetail(await fetchJobPage(link), link)
+        .map((job) => ({ ...job, sourceName: "السوق المفتوح" })),
+    ),
+  );
+  const verified = details.filter((result): result is PromiseFulfilledResult<Item[]> =>
+    result.status === "fulfilled");
+  // A list of unverified links is not proof of any open vacancy.
+  if (links.size && verified.length === 0 && searches.items.length === 0) {
+    throw new Error("تعذر التحقق من حالة جميع إعلانات السوق المفتوح");
   }
-  return out;
+  return {
+    items: [...searches.items, ...verified.flatMap((result) => result.value)],
+    failedRequests: searches.failedRequests + details.length - verified.length,
+  };
 }
 
 // ---- Mourjan (مرجان) Saudi accounting vacancies: every ad there is an employer looking for an accountant ----
