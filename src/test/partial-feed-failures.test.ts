@@ -16,7 +16,7 @@ describe("partial job source recovery", () => {
     await expect(collectIndependentPages([
       async () => { throw new Error("HTTP 403"); },
       async () => { throw new Error("HTTP 429"); },
-    ], "المصدر")).rejects.toThrow("جميع صفحات المصدر");
+    ], "المصدر")).rejects.toThrow("source_batch_failed:blocked");
   });
 
   it("treats an empty source list as a valid no-open-jobs result", async () => {
