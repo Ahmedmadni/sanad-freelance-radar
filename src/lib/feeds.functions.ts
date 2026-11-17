@@ -310,35 +310,33 @@ async function fetchJobPage(url: string) {
   return res.text();
 }
 
-async function fetchWadhefa(): Promise<Item[]> {
+async function fetchWadhefa(): Promise<SourceCollection> {
   const html = await fetchJobPage(WADHEFA_URL);
   if (!/job_id\[\]|لا توجد وظائف|لا توجد نتائج/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
   const jobs = parseWadhefa(html).slice(0, 30);
-  const out: Item[] = [];
-  // Bound concurrency while verifying that each job's application is still open.
-  for (let start = 0; start < jobs.length; start += 5) {
-    await Promise.all(jobs.slice(start, start + 5).map(async (job) => {
+  return collectIndependentPages(
+    jobs.map((job) => async (): Promise<Item[]> => {
       const detail = parseWadhefaDetail(await fetchJobPage(job.link));
-      if (!detail.open) return;
-      out.push({ ...job, description: detail.description || job.description, employment: detail.employment, sourceName: "وظيفة.كوم" });
-    }));
-  }
-  return out;
+      return detail.open
+        ? [{ ...job, description: detail.description || job.description,
+          employment: detail.employment, sourceName: "وظيفة.كوم" }]
+        : [];
+    }),
+    "وظيفة.كوم",
+  );
 }
 
-async function fetchMihnati(): Promise<Item[]> {
+async function fetchMihnati(): Promise<SourceCollection> {
   const html = await fetchJobPage(MIHNATI_URL);
   if (!/jlist|لا توجد وظائف|No jobs/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
   const links = parseMihnatiLinks(html).slice(0, 30);
-  const out: Item[] = [];
-  for (let start = 0; start < links.length; start += 5) {
-    await Promise.all(links.slice(start, start + 5).map(async (link) => {
-      for (const job of parseMihnati(await fetchJobPage(link), link)) {
-        out.push({ ...job, sourceName: "مهنتي" });
-      }
-    }));
-  }
-  return out;
+  return collectIndependentPages(
+    links.map((link) => async (): Promise<Item[]> =>
+      parseMihnati(await fetchJobPage(link), link)
+        .map((job) => ({ ...job, sourceName: "مهنتي" })),
+    ),
+    "مهنتي",
+  );
 }
 
 async function fetchGlobalJobSite(site: GlobalJobSite): Promise<Item[]> {
