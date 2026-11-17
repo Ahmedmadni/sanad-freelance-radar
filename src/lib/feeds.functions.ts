@@ -252,29 +252,35 @@ async function fetchKafiil(): Promise<Item[]> {
 const LI_KEYWORDS = ["accountant", "محاسب", "bookkeeper", "accounting"];
 
 
-async function fetchLinkedIn(): Promise<Item[]> {
-  const out: Item[] = [];
-  await Promise.all(
-    LI_KEYWORDS.flatMap((k) => [0, 25].map((start) => ({ k, start }))).map(async ({ k, start }) => {
-      const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(k)}&location=Saudi%20Arabia&f_TPR=r2592000&start=${start}`;
-      const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36" } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      for (const j of parseLinkedIn(await res.text())) {
-        if (!isSaudi(j.location) || !isAccountingRequest(j.title, true)) continue;
-        out.push({
+async function fetchLinkedIn(): Promise<SourceCollection> {
+  const requests = LI_KEYWORDS.flatMap((keyword) =>
+    [0, 25].map((start) => async (): Promise<Item[]> => {
+      const url = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+        + "?keywords=" + encodeURIComponent(keyword)
+        + "&location=Saudi%20Arabia&f_TPR=r2592000&start=" + start;
+      const response = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36" },
+        signal: AbortSignal.timeout(12_000),
+      });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const html = await response.text();
+      if (/captcha|verify you are human|access denied|just a moment/i.test(html.slice(0, 2400))) {
+        throw new Error("LinkedIn challenge page");
+      }
+      return parseLinkedIn(html)
+        .filter((j) => isSaudi(j.location) && isAccountingRequest(j.title, true))
+        .map((j) => ({
           title: j.title,
-          description: `${j.company} تبحث عن ${j.title} — ${j.location}`,
+          description: j.company + " تبحث عن " + j.title + " — " + j.location,
           link: j.link,
           publishedAt: j.date ? new Date(j.date).toISOString() : null,
           sourceName: "لينكدإن",
-          location: `${j.company} · ${j.location}`,
-          // LinkedIn listings are salaried positions unless the title says otherwise.
+          location: j.company + " · " + j.location,
           employment: inferEmployment(j.title),
-        });
-      }
+        }));
     }),
   );
-  return out;
+  return collectIndependentPages(requests, "لينكدإن");
 }
 
 const WADHEFA_URL = "https://www.wadhefa.com/jobfind.php?jids%5B%5D=62";
