@@ -97,12 +97,17 @@ function SettingsPage() {
       const sent = result.statuses.filter((item) => item.status === "sent");
       const skipped = result.statuses.filter((item) =>
         item.status === "already-handled" || item.status === "in-progress");
+      const failedSourceNames = [...new Set(result.statuses.flatMap((item) =>
+        (item.failed_sources ?? []).map((source) => source.name)))];
       if (sent.length) {
         toast.success("تم إرسال " + sent.length + " تقرير مستحق إلى قناة سند");
       } else if (skipped.length) {
         toast.success("لا توجد تقارير جديدة مستحقة؛ التقارير السابقة مرسلة بالفعل");
       } else {
         toast.info("تم فحص التقارير، ولا توجد فترات مستحقة للإرسال");
+      }
+      if (failedSourceNames.length > 0) {
+        toast.warning("بعض المصادر لم تُفحص بنجاح: " + failedSourceNames.join("، "));
       }
       const info = await loadDigest({ data: {} });
       setDigestInfo({

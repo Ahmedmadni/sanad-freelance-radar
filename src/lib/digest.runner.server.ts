@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { collectAllSources } from "./feeds.functions";
 import { postTelegramChannel } from "./telegram-channel.server";
+import { classifySourceError, safeSourceLabel } from "./source-health";
 import { recoverableDigestSlots, riyadhClock, digestSlotGate, formatDigestParts, type RadarFrequency } from "./digest.logic";
 import type { Source } from "./settings";
 import type { Opportunity } from "./opportunities";
@@ -78,10 +79,18 @@ async function claimSlot(owner: string, slot: string, now: Date): Promise<boolea
   if (digestSlotGate(existing, now)) return false;
 
   if (existing) {
-    const { error: updateError } = await db.from("radar_digest_runs")
+    // Compare-and-swap the observed checkpoint. With two schedulers, simply
+    // writing "sending" would let them both reclaim the same failed/stale slot.
+    let claim = db.from("radar_digest_runs")
       .update({ status: "sending", started_at: now.toISOString(), error: null, finished_at: null })
-      .eq("user_id", owner).eq("slot_key", slot);
+      .eq("user_id", owner).eq("slot_key", slot)
+      .eq("status", existing.status);
+    claim = existing.started_at
+      ? claim.eq("started_at", existing.started_at)
+      : claim.is("started_at", null);
+    const { data: claimed, error: updateError } = await claim.select("slot_key");
     if (updateError) throw new Error("Recover digest state: " + updateError.message);
+    if (!claimed || claimed.length !== 1) return false;
   } else {
     const { error: insertError } = await db.from("radar_digest_runs")
       .insert({ user_id: owner, slot_key: slot, status: "sending" });
@@ -221,6 +230,11 @@ export async function runBackgroundRadar(now = new Date()) {
         discovered: opportunities.length,
         sources_ok: collection.statuses.filter((s) => s.ok).length,
         sources_failed: collection.statuses.filter((s) => !s.ok).length,
+        // Safe fixed codes give accurate diagnostics without logging remote URLs.
+        failed_sources: collection.statuses.filter((s) => !s.ok).map((s) => ({
+          name: safeSourceLabel(s.name),
+          reason: classifySourceError(s.error),
+        })),
         slot,
         recovery: slot.slice(0, 10) !== riyadhClock(now).day,
         skipped_collection: false,
