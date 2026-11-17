@@ -103,6 +103,7 @@ export const runDueDigestNow = createServerFn({ method: "POST" })
         discovered?: number;
         sources_ok?: number;
         sources_failed?: number;
+        failed_sources?: Array<{ name: string; reason: string }>;
       }>,
     };
   });
