@@ -222,14 +222,34 @@ function arRelative(t: string): string | null {
   return mins === null ? null : new Date(Date.now() - mins * 60000).toISOString();
 }
 async function fetchMourjan(): Promise<Item[]> {
-  const res = await fetch("https://www.mourjan.com/sa/accounting/vacancies/", {
-    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept-Language": "ar" },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const html = await res.text();
-  if (!/class=widget|لا توجد إعلانات/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
-  return parseMourjan(html).map((job) => ({ ...job, sourceName: "مرجان" }));
+  const url = "https://www.mourjan.com/sa/accounting/vacancies/";
+  // A slow connection should not discard this entire source permanently.
+  // Retry one timeout with a shorter budget; never retry access-denied pages.
+  let lastTimeout: unknown;
+  for (const timeoutMs of [12_000, 9_000]) {
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+          "Accept-Language": "ar",
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (error) {
+      if (error instanceof Error &&
+        /abort|timeout|timed.?out|مهلة/i.test(error.name + " " + error.message)) {
+        lastTimeout = error;
+        continue;
+      }
+      throw error;
+    }
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const html = await response.text();
+    if (!/class=widget|لا توجد إعلانات/.test(html)) throw new Error("تعذرت قراءة قائمة الوظائف");
+    return parseMourjan(html).map((job) => ({ ...job, sourceName: "مرجان" }));
+  }
+  throw new Error(lastTimeout ? "انتهت مهلة الاتصال بمنصة مرجان بعد إعادة المحاولة" : "تعذر الاتصال بمنصة مرجان");
 }
 
 // ---- Kafiil (كفيل) freelance projects: buyers posting projects, filtered to accounting + Saudi ----
