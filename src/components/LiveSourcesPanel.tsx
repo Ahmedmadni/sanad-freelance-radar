@@ -1,6 +1,7 @@
 import { RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/use-live-sources";
+import { MANUAL_JOB_SOURCES } from "@/lib/manual-job-sources";
 import type { useLiveSources } from "@/lib/use-live-sources";
 
 /** Status bar: last update, counts, duplicates removed, per-source health. */
@@ -25,6 +26,20 @@ export function SourcesStatus({ q }: { q: ReturnType<typeof useLiveSources> }) {
           </span>
         ))}
       </div>
+      <details className="rounded-lg border border-dashed px-3 py-2">
+        <summary className="cursor-pointer text-xs font-medium">
+          منصات يمكن تصفحها يدوياً فقط ({MANUAL_JOB_SOURCES.length}) — ليست ضمن الفحص التلقائي
+        </summary>
+        <div className="mt-2 space-y-2 text-xs text-muted-foreground">
+          {MANUAL_JOB_SOURCES.map((source) => (
+            <p key={source.url}>
+              <a href={source.url} target="_blank" rel="noopener noreferrer" className="font-medium text-primary underline underline-offset-2">{source.name}</a>
+              {" — "}{source.note}
+            </p>
+          ))}
+          <p>لا نحتسب هذه المنصات مصادر ناجحة أو فاشلة حتى يتوفر تكامل يسمح بالتحقق من الفرص.</p>
+        </div>
+      </details>
       {q.isError && <p className="text-sm text-destructive">{(q.error as Error).message}</p>}
     </div>
   );
