@@ -318,16 +318,9 @@ async function fetchGlobalJobSite(site: GlobalJobSite): Promise<Item[]> {
   return out;
 }
 
-// These buyer-request pages can return empty challenge responses rather than listings.
-// Keep their public links visible without treating an unreadable response as zero jobs.
-async function checkBuyerPage(url: string): Promise<Item[]> {
-  const html = await fetchJobPage(url);
-  if (!html.trim() || /captcha|access denied|just a moment|verify you are human/i.test(html)) {
-    throw new Error("المنصة لا تتيح قراءة الطلبات آلياً؛ متاحة للتصفح المباشر");
-  }
-  throw new Error("تعذرت قراءة طلبات المنصة والتحقق من موقع العمل؛ متاحة للتصفح المباشر");
-}
-
+// Mostaql, Khamsat and Baaeed are deliberately available as manual links
+// in the user interface. Previously checkBuyerPage always threw, so these
+// sources were falsely presented as three automated-source failures.
 // Freelancer projects are global; keep only ones that mention Saudi Arabia.
 const BUILT_IN_RSS: { name: string; url: string }[] = [
   { name: "Freelancer", url: "https://www.freelancer.com/rss/job_accounting.xml" },
@@ -373,9 +366,6 @@ export async function collectAllSources(sources: In["sources"], maxItems = 150) 
       run("كفيل", "https://kafiil.com/projects", true, fetchKafiil),
       run("وظيفة.كوم", WADHEFA_URL, true, fetchWadhefa),
       run("مهنتي", MIHNATI_URL, true, fetchMihnati),
-      run("مستقل", "https://mostaql.com/projects?keyword=%D9%85%D8%AD%D8%A7%D8%B3%D8%A8%D8%A9", true, () => checkBuyerPage("https://mostaql.com/projects?keyword=%D9%85%D8%AD%D8%A7%D8%B3%D8%A8%D8%A9")),
-      run("خمسات", "https://khamsat.com/community/requests", true, () => checkBuyerPage("https://khamsat.com/community/requests")),
-      run("بعيد", "https://baaeed.com/remote-jobs", true, () => checkBuyerPage("https://baaeed.com/remote-jobs")),
       ...(["indeed", "naukrigulf", "bayt"] as const).map((site) => run(GLOBAL_JOB_SITES[site].name, GLOBAL_JOB_SITES[site].search, true, () => fetchGlobalJobSite(site))),
       ...BUILT_IN_RSS.map((s) => run(`${s.name} (${s.url.split("job_")[1]?.replace(".xml", "")})`, s.url, true, () => fetchUrl(s.url, s.name, true))),
       ...sources.map((s) => run(s.name, s.url, false, () => fetchUrl(s.url, s.name, false))),
